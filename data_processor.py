@@ -52,6 +52,56 @@ def clean_address(val: Any) -> str:
         return ""
     return s
 
+def format_address_title_case(addr: Any) -> str:
+    """Format municipal hall address into clean Title Case."""
+    if not addr:
+        return ""
+    s = clean_address(addr)
+    if not s:
+        return ""
+        
+    # Ensure space after commas if missing (e.g., 'Townsite,Maluso' -> 'Townsite, Maluso')
+    s = re.sub(r',([^\s\d])', r', \1', s)
+    s = " ".join(s.split())
+    
+    def cap_word(w: str) -> str:
+        if not w:
+            return ""
+        # Handle compound words with hyphens (e.g. 'LGU-Malungon', 'Sitio Lam-Ag')
+        if '-' in w:
+            return "-".join(cap_word(p) for p in w.split('-'))
+        # Handle slashes (e.g. 'LGU/Town Hall')
+        if '/' in w:
+            return "/".join(cap_word(p) for p in w.split('/'))
+        # Handle leading parenthesis or quotes
+        if (w.startswith('(') or w.startswith('"') or w.startswith("'")) and len(w) > 1:
+            return w[0] + cap_word(w[1:])
+            
+        clean_upper = w.upper().rstrip('.,:;')
+        if clean_upper in {'LGU', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'}:
+            punct = w[len(clean_upper):]
+            return clean_upper + punct
+            
+        return w.capitalize()
+        
+    tokens = s.split(' ')
+    return " ".join(cap_word(t) for t in tokens)
+
+def title_case_text(text: str) -> str:
+    """Format text into Title Case while preserving hyphens and slashes."""
+    if not text:
+        return ""
+    words = text.split()
+    converted = []
+    for w in words:
+        if '-' in w:
+            converted.append("-".join(part.capitalize() for part in w.split('-')))
+        elif '/' in w:
+            converted.append("/".join(part.capitalize() for part in w.split('/')))
+        else:
+            converted.append(w.capitalize())
+    return " ".join(converted)
+
 def get_middle_initial(middle: Any) -> str:
     """Extract clean middle initial with period, e.g. 'Dawal' -> 'D.'"""
     mn = clean_token(middle)
@@ -315,11 +365,15 @@ class OfficialsData:
             address = rec["address"]
             
             if name_case == "title":
-                town = " ".join(w.capitalize() for w in town.split())
-                prov = " ".join(w.capitalize() for w in prov.split())
+                town = title_case_text(town)
+                prov = title_case_text(prov)
+                address = format_address_title_case(address)
             elif name_case == "upper":
                 town = town.upper()
                 prov = prov.upper()
+                address = address.upper()
+            else:
+                address = format_address_title_case(address)
                 
             if query:
                 searchable = f"{town} {prov} {reg} {mayor_name} {vm_name} {address}".lower()
