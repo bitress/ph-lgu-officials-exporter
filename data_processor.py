@@ -203,7 +203,7 @@ class OfficialsData:
         
         town_map: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
         
-        for row in sheet.iter_rows(min_row=2, values_only=True):
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             if not row or not any(row):
                 continue
             
@@ -240,13 +240,15 @@ class OfficialsData:
                 if entry["mayor"] is None or (not entry["mayor"]["address"] and clean_address(addr)):
                     entry["mayor"] = {
                         "first": fn, "middle": mn, "last": ln, "suffix": suf,
-                        "address": clean_address(addr), "contact": contact
+                        "address": clean_address(addr), "contact": contact,
+                        "row_idx": row_idx
                     }
             elif "VICE-MAYOR" in pos_upper or "VICE MAYOR" in pos_upper:
                 if entry["vice_mayor"] is None or (not entry["vice_mayor"]["address"] and clean_address(addr)):
                     entry["vice_mayor"] = {
                         "first": fn, "middle": mn, "last": ln, "suffix": suf,
-                        "address": clean_address(addr), "contact": contact
+                        "address": clean_address(addr), "contact": contact,
+                        "row_idx": row_idx
                     }
             else:
                 clean_addr = clean_address(addr)
@@ -418,3 +420,126 @@ class OfficialsData:
                 writer.writerow(r)
                 
         return len(records)
+
+    def get_municipality_raw(self, town: str, province: str) -> Optional[Dict[str, Any]]:
+        """Get raw municipality dictionary by town and province."""
+        if not self._loaded:
+            self.load()
+        t_clean = town.strip().upper()
+        p_clean = province.strip().upper()
+        for rec in self.records:
+            if rec["town"].strip().upper() == t_clean and rec["province"].strip().upper() == p_clean:
+                return rec
+        return None
+
+    def update_municipality(
+        self,
+        town: str,
+        province: str,
+        mayor_first: str,
+        mayor_middle: str,
+        mayor_last: str,
+        mayor_suffix: str,
+        mayor_address: str,
+        mayor_contact: str = "",
+        vm_first: str = "",
+        vm_middle: str = "",
+        vm_last: str = "",
+        vm_suffix: str = "",
+        vm_address: str = "",
+        vm_contact: str = "",
+        backup: bool = True
+    ) -> bool:
+        """
+        Update Mayor and Vice Mayor info for a town, and save to Officials_List.xlsx.
+        """
+        rec = self.get_municipality_raw(town, province)
+        if not rec:
+            return False
+
+        if backup and os.path.exists(self.excel_path):
+            backup_path = self.excel_path + ".backup.xlsx"
+            if not os.path.exists(backup_path):
+                import shutil
+                try:
+                    shutil.copy2(self.excel_path, backup_path)
+                except Exception:
+                    pass
+
+        wb = openpyxl.load_workbook(self.excel_path)
+        sheet = wb.active
+
+        # 1. Update Mayor row
+        mayor_info = rec.get("raw_mayor")
+        if mayor_info and mayor_info.get("row_idx"):
+            m_row = mayor_info["row_idx"]
+            sheet.cell(row=m_row, column=4, value=mayor_first.strip() if mayor_first else None)
+            sheet.cell(row=m_row, column=5, value=mayor_middle.strip() if mayor_middle else None)
+            sheet.cell(row=m_row, column=6, value=mayor_last.strip() if mayor_last else None)
+            sheet.cell(row=m_row, column=7, value=mayor_suffix.strip() if mayor_suffix else None)
+            sheet.cell(row=m_row, column=10, value=mayor_contact.strip() if mayor_contact else None)
+            sheet.cell(row=m_row, column=11, value=mayor_address.strip() if mayor_address else None)
+        else:
+            m_row = sheet.max_row + 1
+            sheet.cell(row=m_row, column=1, value=rec["region"])
+            sheet.cell(row=m_row, column=2, value=rec["province"])
+            sheet.cell(row=m_row, column=3, value=rec["town"])
+            sheet.cell(row=m_row, column=4, value=mayor_first.strip() if mayor_first else None)
+            sheet.cell(row=m_row, column=5, value=mayor_middle.strip() if mayor_middle else None)
+            sheet.cell(row=m_row, column=6, value=mayor_last.strip() if mayor_last else None)
+            sheet.cell(row=m_row, column=7, value=mayor_suffix.strip() if mayor_suffix else None)
+            sheet.cell(row=m_row, column=8, value="MUNICIPAL MAYOR")
+            sheet.cell(row=m_row, column=10, value=mayor_contact.strip() if mayor_contact else None)
+            sheet.cell(row=m_row, column=11, value=mayor_address.strip() if mayor_address else None)
+            if not mayor_info:
+                rec["raw_mayor"] = {}
+            rec["raw_mayor"]["row_idx"] = m_row
+
+        # 2. Update Vice Mayor row
+        vm_info = rec.get("raw_vm")
+        if vm_info and vm_info.get("row_idx"):
+            v_row = vm_info["row_idx"]
+            sheet.cell(row=v_row, column=4, value=vm_first.strip() if vm_first else None)
+            sheet.cell(row=v_row, column=5, value=vm_middle.strip() if vm_middle else None)
+            sheet.cell(row=v_row, column=6, value=vm_last.strip() if vm_last else None)
+            sheet.cell(row=v_row, column=7, value=vm_suffix.strip() if vm_suffix else None)
+            sheet.cell(row=v_row, column=10, value=vm_contact.strip() if vm_contact else None)
+            sheet.cell(row=v_row, column=11, value=vm_address.strip() if vm_address else None)
+        else:
+            v_row = sheet.max_row + 1
+            sheet.cell(row=v_row, column=1, value=rec["region"])
+            sheet.cell(row=v_row, column=2, value=rec["province"])
+            sheet.cell(row=v_row, column=3, value=rec["town"])
+            sheet.cell(row=v_row, column=4, value=vm_first.strip() if vm_first else None)
+            sheet.cell(row=v_row, column=5, value=vm_middle.strip() if vm_middle else None)
+            sheet.cell(row=v_row, column=6, value=vm_last.strip() if vm_last else None)
+            sheet.cell(row=v_row, column=7, value=vm_suffix.strip() if vm_suffix else None)
+            sheet.cell(row=v_row, column=8, value="MUNICIPAL VICE-MAYOR")
+            sheet.cell(row=v_row, column=10, value=vm_contact.strip() if vm_contact else None)
+            sheet.cell(row=v_row, column=11, value=vm_address.strip() if vm_address else None)
+            if not vm_info:
+                rec["raw_vm"] = {}
+            rec["raw_vm"]["row_idx"] = v_row
+
+        # Save workbook to disk
+        wb.save(self.excel_path)
+
+        # Update in-memory record
+        if not rec.get("raw_mayor"):
+            rec["raw_mayor"] = {}
+        rec["raw_mayor"].update({
+            "first": mayor_first, "middle": mayor_middle, "last": mayor_last,
+            "suffix": mayor_suffix, "address": mayor_address, "contact": mayor_contact,
+            "row_idx": m_row
+        })
+
+        if not rec.get("raw_vm"):
+            rec["raw_vm"] = {}
+        rec["raw_vm"].update({
+            "first": vm_first, "middle": vm_middle, "last": vm_last,
+            "suffix": vm_suffix, "address": vm_address, "contact": vm_contact,
+            "row_idx": v_row
+        })
+
+        rec["address"] = mayor_address or vm_address or rec.get("address", "")
+        return True

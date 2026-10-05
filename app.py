@@ -1,12 +1,14 @@
 """
 Philippine Municipal Officials Directory & CSV Exporter
-A Python application to filter, view, and export LGU Municipal Officials
+A Python application to filter, view, edit, and export LGU Municipal Officials
 (Mayor Name, Municipal Hall Address, Town, Province, Vice Mayor) by Region and Province.
 
 Features:
 - Modern interactive Desktop GUI (Tkinter)
 - Fast live filtering by Region and Province
 - Real-time search by town, mayor, vice mayor, or province
+- Excel (.xlsx) editing capability directly within the desktop GUI and Web UI
+- Automatic backup creation before modifying the spreadsheet
 - One-click CSV export with UTF-8 BOM (Excel compatible)
 - CLI mode for batch automation and scripts
 - Optional local web interface (--web)
@@ -16,7 +18,7 @@ import sys
 import os
 import argparse
 import webbrowser
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 # Local data processor
 from data_processor import OfficialsData
@@ -96,6 +98,42 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
     data.load()
 
     class WebHandler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            parsed = urllib.parse.urlparse(self.path)
+            if parsed.path == "/api/update":
+                content_length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_length)
+                try:
+                    payload = json.loads(body.decode("utf-8"))
+                    success = data.update_municipality(
+                        town=payload.get("town", ""),
+                        province=payload.get("province", ""),
+                        mayor_first=payload.get("mayor_first", ""),
+                        mayor_middle=payload.get("mayor_middle", ""),
+                        mayor_last=payload.get("mayor_last", ""),
+                        mayor_suffix=payload.get("mayor_suffix", ""),
+                        mayor_address=payload.get("mayor_address", ""),
+                        mayor_contact=payload.get("mayor_contact", ""),
+                        vm_first=payload.get("vm_first", ""),
+                        vm_middle=payload.get("vm_middle", ""),
+                        vm_last=payload.get("vm_last", ""),
+                        vm_suffix=payload.get("vm_suffix", ""),
+                        vm_address=payload.get("vm_address", ""),
+                        vm_contact=payload.get("vm_contact", "")
+                    )
+                    self.send_response(200 if success else 400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": success}).encode("utf-8"))
+                except Exception as ex:
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": False, "error": str(ex)}).encode("utf-8"))
+            else:
+                self.send_response(404)
+                self.end_headers()
+
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
@@ -128,6 +166,16 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
                     search_query=q,
                     name_case=casing
                 )
+                # Attach raw data for edit modal
+                for r in records:
+                    raw = data.get_municipality_raw(r["Town"], r["Province"])
+                    if raw:
+                        r["raw_mayor"] = raw.get("raw_mayor") or {}
+                        r["raw_vm"] = raw.get("raw_vm") or {}
+                    else:
+                        r["raw_mayor"] = {}
+                        r["raw_vm"] = {}
+
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -189,17 +237,18 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --accent: #10b981;
+      --purple: #8b5cf6;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; }
-    .container { max-width: 1350px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; }
     header { margin-bottom: 24px; text-align: center; }
     h1 { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
     p.sub { color: var(--text-muted); font-size: 14px; }
     .filters-card {
       background: var(--card); border: 1px solid var(--card-border);
       border-radius: 12px; padding: 20px; margin-bottom: 20px;
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) auto;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) auto;
       gap: 16px; align-items: end;
     }
     .field { display: flex; flex-direction: column; gap: 6px; }
@@ -210,13 +259,16 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
     }
     select:focus, input:focus { border-color: var(--primary); }
     .btn {
-      background: var(--primary); color: #fff; border: none; padding: 10px 20px;
+      background: var(--primary); color: #fff; border: none; padding: 10px 18px;
       border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px;
       transition: background 0.2s; display: inline-flex; align-items: center; gap: 8px;
     }
     .btn:hover { background: var(--primary-hover); }
     .btn-success { background: var(--accent); }
     .btn-success:hover { background: #059669; }
+    .btn-purple { background: var(--purple); }
+    .btn-purple:hover { background: #7c3aed; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
     .stats-row {
       display: flex; justify-content: space-between; align-items: center;
       margin-bottom: 12px; color: var(--text-muted); font-size: 14px;
@@ -228,7 +280,7 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
     table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
     th {
       background: #111827; position: sticky; top: 0; padding: 12px 14px;
-      font-weight: 600; color: #94a3b8; border-bottom: 1px solid var(--card-border);
+      font-weight: 600; color: #94a3b8; border-bottom: 1px solid var(--card-border); z-index: 10;
     }
     td { padding: 12px 14px; border-bottom: 1px solid rgba(51, 65, 85, 0.4); }
     tr:hover td { background: rgba(59, 130, 246, 0.08); }
@@ -236,13 +288,24 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
       display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px;
       background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-weight: 600;
     }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      z-index: 1000; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-card {
+      background: var(--card); border: 1px solid var(--card-border);
+      border-radius: 14px; width: 100%; max-width: 680px; max-height: 90vh;
+      overflow-y: auto; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>🏛️ Philippine Municipal Officials Directory</h1>
-      <p class="sub">1,488 Municipalities • 18 Regions • Export Mayor Name, Municipal Hall Address, Town, Province, Vice Mayor</p>
+      <p class="sub">1,488 Municipalities • 18 Regions • Direct Editing in Officials_List.xlsx • CSV Exporter</p>
     </header>
 
     <div class="filters-card">
@@ -261,7 +324,7 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
       <div class="field">
         <label>Name Formatting</label>
         <select id="casingSelect" onchange="fetchRecords()">
-          <option value="title">Title Case (e.g. Juan Dela Cruz)</option>
+          <option value="title">Title Case (e.g. Juan D. Dela Cruz)</option>
           <option value="upper">UPPERCASE</option>
           <option value="original">Original from File</option>
         </select>
@@ -275,7 +338,7 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
       <div id="statusText">Loading...</div>
       <div>
         <label style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-          <input type="checkbox" id="includeRegCheck" onchange="fetchRecords()"> Include Region column in CSV
+          <input type="checkbox" id="includeRegCheck" onchange="fetchRecords()"> Include Region column in CSV & Table
         </label>
       </div>
     </div>
@@ -291,6 +354,7 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
             <th>Mayor Name</th>
             <th>Vice Mayor</th>
             <th>Municipal Hall Address</th>
+            <th style="text-align:center;">Action</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -298,8 +362,61 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
     </div>
   </div>
 
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div>
+          <h2 id="modalTitle" style="font-size:18px; color:#fff;">Edit Officials</h2>
+          <p id="modalSubtitle" style="font-size:12px; color:var(--text-muted);">Saved directly to Officials_List.xlsx</p>
+        </div>
+        <button onclick="closeEditModal()" style="background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer;">&times;</button>
+      </div>
+
+      <form id="editForm" onsubmit="submitEdit(event)">
+        <input type="hidden" id="editTown">
+        <input type="hidden" id="editProvince">
+
+        <!-- Mayor Card -->
+        <div style="background:#0f172a; padding:14px; border-radius:10px; margin-bottom:14px; border:1px solid rgba(59,130,246,0.3);">
+          <h3 style="font-size:14px; color:#60a5fa; margin-bottom:10px; display:flex; align-items:center; gap:6px;">🎖️ Municipal Mayor</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+            <div class="field"><label>First Name</label><input type="text" id="mFirst"></div>
+            <div class="field"><label>Middle Name</label><input type="text" id="mMiddle"></div>
+            <div class="field"><label>Last Name</label><input type="text" id="mLast"></div>
+            <div class="field"><label>Suffix (e.g. Jr., III)</label><input type="text" id="mSuffix"></div>
+          </div>
+          <div class="field" style="margin-bottom:10px;"><label>Office / Municipal Hall Address</label><input type="text" id="mAddress"></div>
+          <div class="field"><label>Contact Number</label><input type="text" id="mContact"></div>
+        </div>
+
+        <!-- Vice Mayor Card -->
+        <div style="background:#0f172a; padding:14px; border-radius:10px; margin-bottom:18px; border:1px solid rgba(16,185,129,0.3);">
+          <h3 style="font-size:14px; color:#34d399; margin-bottom:10px; display:flex; align-items:center; gap:6px;">🏅 Municipal Vice-Mayor</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+            <div class="field"><label>First Name</label><input type="text" id="vmFirst"></div>
+            <div class="field"><label>Middle Name</label><input type="text" id="vmMiddle"></div>
+            <div class="field"><label>Last Name</label><input type="text" id="vmLast"></div>
+            <div class="field"><label>Suffix (e.g. Jr., III)</label><input type="text" id="vmSuffix"></div>
+          </div>
+          <div class="field" style="margin-bottom:10px;"><label>Office Address</label><input type="text" id="vmAddress"></div>
+          <div class="field"><label>Contact Number</label><input type="text" id="vmContact"></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span id="saveStatus" style="font-size:12px; color:#60a5fa;"></span>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn" style="background:#475569;" onclick="closeEditModal()">Cancel</button>
+            <button type="submit" class="btn btn-success" id="btnSaveModal">💾 Save to Excel (.xlsx)</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     let meta = { regions: [], provinces_by_region: {} };
+    let currentRecordsCache = [];
 
     async function init() {
       const res = await fetch('/api/meta');
@@ -341,6 +458,7 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
       const params = new URLSearchParams({ region: reg, province: prov, q: q, casing: casing });
       const res = await fetch('/api/records?' + params.toString());
       const data = await res.json();
+      currentRecordsCache = data;
 
       document.getElementById('statusText').innerText = `Showing ${data.length} municipal records • ${incReg ? '6 columns (incl. Region)' : '5 columns (Standard)'}`;
 
@@ -354,8 +472,91 @@ def run_web(port: int = 8000, excel_path: str = "Officials_List.xlsx"):
           <td style="color:#60a5fa; font-weight:600;">${r['Mayor Name'] || '<span style="color:#64748b">None</span>'}</td>
           <td style="color:#34d399; font-weight:600;">${r['Vice Mayor'] || '<span style="color:#64748b">None</span>'}</td>
           <td style="font-size:12px; color:#cbd5e1;">${r['Municipal Hall Address'] || '<span style="color:#64748b">None</span>'}</td>
+          <td style="text-align:center;">
+            <button class="btn btn-purple btn-sm" onclick="openEditModal(${i})">✏️ Edit</button>
+          </td>
         </tr>
       `).join('');
+    }
+
+    function openEditModal(index) {
+      const rec = currentRecordsCache[index];
+      if (!rec) return;
+
+      document.getElementById('editTown').value = rec.Town;
+      document.getElementById('editProvince').value = rec.Province;
+      document.getElementById('modalTitle').innerText = `Edit Officials: ${rec.Town}, ${rec.Province}`;
+      document.getElementById('modalSubtitle').innerText = `Region: ${rec.Region} • Changes update Officials_List.xlsx directly`;
+
+      const m = rec.raw_mayor || {};
+      const vm = rec.raw_vm || {};
+
+      document.getElementById('mFirst').value = m.first || '';
+      document.getElementById('mMiddle').value = m.middle || '';
+      document.getElementById('mLast').value = m.last || '';
+      document.getElementById('mSuffix').value = m.suffix || '';
+      document.getElementById('mAddress').value = m.address || rec['Municipal Hall Address'] || '';
+      document.getElementById('mContact').value = m.contact || '';
+
+      document.getElementById('vmFirst').value = vm.first || '';
+      document.getElementById('vmMiddle').value = vm.middle || '';
+      document.getElementById('vmLast').value = vm.last || '';
+      document.getElementById('vmSuffix').value = vm.suffix || '';
+      document.getElementById('vmAddress').value = vm.address || '';
+      document.getElementById('vmContact').value = vm.contact || '';
+
+      document.getElementById('saveStatus').innerText = '';
+      document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').style.display = 'none';
+    }
+
+    async function submitEdit(e) {
+      e.preventDefault();
+      const statusEl = document.getElementById('saveStatus');
+      const btnSave = document.getElementById('btnSaveModal');
+      statusEl.innerText = 'Saving to Officials_List.xlsx... please wait';
+      btnSave.disabled = true;
+
+      const payload = {
+        town: document.getElementById('editTown').value,
+        province: document.getElementById('editProvince').value,
+        mayor_first: document.getElementById('mFirst').value,
+        mayor_middle: document.getElementById('mMiddle').value,
+        mayor_last: document.getElementById('mLast').value,
+        mayor_suffix: document.getElementById('mSuffix').value,
+        mayor_address: document.getElementById('mAddress').value,
+        mayor_contact: document.getElementById('mContact').value,
+        vm_first: document.getElementById('vmFirst').value,
+        vm_middle: document.getElementById('vmMiddle').value,
+        vm_last: document.getElementById('vmLast').value,
+        vm_suffix: document.getElementById('vmSuffix').value,
+        vm_address: document.getElementById('vmAddress').value,
+        vm_contact: document.getElementById('vmContact').value,
+      };
+
+      try {
+        const res = await fetch('/api/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeEditModal();
+          await fetchRecords();
+          alert(`Successfully updated ${payload.town}, ${payload.province} in Officials_List.xlsx!`);
+        } else {
+          alert('Failed to save update to Excel.');
+        }
+      } catch (err) {
+        alert('Error saving update: ' + err);
+      } finally {
+        btnSave.disabled = false;
+        statusEl.innerText = '';
+      }
     }
 
     function exportCsv() {
@@ -406,7 +607,7 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
     root.geometry("1180x760")
     root.minsize(920, 600)
 
-    # Set icon if available or configure theme
+    # Set theme
     style = ttk.Style()
     available_themes = style.theme_names()
     if "vista" in available_themes:
@@ -417,7 +618,6 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
     # Color palette
     COLOR_BG = "#f8fafc"         # Slate 50
     COLOR_CARD = "#ffffff"       # White
-    COLOR_BORDER = "#e2e8f0"     # Slate 200
     COLOR_HEADER = "#0f172a"     # Slate 900
     COLOR_PRIMARY = "#2563eb"    # Blue 600
     COLOR_SUCCESS = "#059669"    # Emerald 600
@@ -457,7 +657,7 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
 
     sub_label = tk.Label(
         header_frame,
-        text="Filter by Region & Province to generate CSV with: Mayor Name, Municipal Hall Address, Town, Province, Vice Mayor",
+        text="Filter, view, edit officials in Officials_List.xlsx, and export CSV with: Mayor Name, Municipal Hall Address, Town, Province, Vice Mayor",
         font=("Segoe UI", 9),
         fg="#64748b",
         bg=COLOR_BG
@@ -479,7 +679,6 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
     control_card.pack(fill=tk.X, pady=(0, 10))
 
     # Grid layout inside control card
-    # Row 0: Region, Province, Quick Search
     tk.Label(control_card, text="Region:", font=("Segoe UI", 9, "bold"), bg=COLOR_CARD, fg="#475569").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=4)
     region_combo = ttk.Combobox(control_card, textvariable=region_var, state="readonly", width=22, font=("Segoe UI", 9))
     region_options = ["All Regions"] + data.regions
@@ -523,7 +722,7 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
     btn_reset = ttk.Button(options_frame, text="Reset Filters", command=lambda: reset_filters())
     btn_reset.pack(side=tk.LEFT, padx=(0, 16))
 
-    # Right side action buttons
+    # Action Buttons: Export, Copy, Edit
     btn_export = tk.Button(
         options_frame,
         text="⬇ Export to CSV",
@@ -554,7 +753,23 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
         cursor="hand2",
         command=lambda: copy_to_clipboard()
     )
-    btn_clipboard.pack(side=tk.RIGHT, padx=(0, 6))
+    btn_clipboard.pack(side=tk.RIGHT, padx=(6, 0))
+
+    btn_edit = tk.Button(
+        options_frame,
+        text="✏️ Edit Official",
+        bg="#7c3aed",
+        fg="white",
+        font=("Segoe UI", 9, "bold"),
+        activebackground="#6d28d9",
+        activeforeground="white",
+        relief=tk.FLAT,
+        padx=12,
+        pady=4,
+        cursor="hand2",
+        command=lambda: open_edit_dialog()
+    )
+    btn_edit.pack(side=tk.RIGHT, padx=(0, 6))
 
     # 3. Stats & Summary Bar
     stats_bar = tk.Frame(main_frame, bg=COLOR_BG)
@@ -563,7 +778,7 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
     lbl_count = tk.Label(stats_bar, textvariable=count_summary_var, font=("Segoe UI", 9, "bold"), fg="#1e293b", bg=COLOR_BG)
     lbl_count.pack(side=tk.LEFT)
 
-    lbl_hint = tk.Label(stats_bar, text="💡 Tip: Double-click any row to view full details • Click headers to sort", font=("Segoe UI", 8), fg="#64748b", bg=COLOR_BG)
+    lbl_hint = tk.Label(stats_bar, text="💡 Tip: Double-click row to view/edit • Right-click for options • Click headers to sort", font=("Segoe UI", 8), fg="#64748b", bg=COLOR_BG)
     lbl_hint.pack(side=tk.RIGHT)
 
     # 4. Preview Table (Treeview)
@@ -763,6 +978,220 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
     province_combo.bind("<<ComboboxSelected>>", on_province_selected)
     casing_combo.bind("<<ComboboxSelected>>", on_casing_selected)
 
+    def open_edit_dialog(target_rec=None):
+        """Open modal dialog to edit Mayor and Vice Mayor info and save directly to Officials_List.xlsx."""
+        if not target_rec:
+            selected_item = tree.selection()
+            if not selected_item:
+                messagebox.showinfo("Select Municipality", "Please select a municipality from the table to edit.")
+                return
+            values = tree.item(selected_item[0], "values")
+            if not values:
+                return
+            town_val = values[0]
+            prov_val = values[1]
+            target_rec = data.get_municipality_raw(town_val, prov_val)
+
+        if not target_rec:
+            messagebox.showerror("Error", "Could not locate municipality record.")
+            return
+
+        raw_mayor = target_rec.get("raw_mayor") or {}
+        raw_vm = target_rec.get("raw_vm") or {}
+
+        edit_win = tk.Toplevel(root)
+        edit_win.title(f"Edit Officials - {target_rec['town']}, {target_rec['province']}")
+        edit_win.geometry("640x660")
+        edit_win.minsize(560, 580)
+        edit_win.configure(bg=COLOR_BG)
+        edit_win.transient(root)
+        edit_win.grab_set()
+
+        # Header banner inside dialog
+        banner = tk.Frame(edit_win, bg="#0f172a", padx=16, pady=12)
+        banner.pack(fill=tk.X)
+        tk.Label(
+            banner,
+            text=f"🏛️ Edit Officials: {target_rec['town']}, {target_rec['province']}",
+            font=("Segoe UI", 12, "bold"),
+            fg="#f8fafc",
+            bg="#0f172a"
+        ).pack(anchor="w")
+        tk.Label(
+            banner,
+            text=f"Region: {target_rec['region']} • Updates are saved directly to Officials_List.xlsx",
+            font=("Segoe UI", 8),
+            fg="#94a3b8",
+            bg="#0f172a"
+        ).pack(anchor="w", pady=(2, 0))
+
+        content_frame = tk.Frame(edit_win, bg=COLOR_BG, padx=16, pady=10)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 1. Mayor Card
+        m_card = tk.LabelFrame(
+            content_frame,
+            text=" Municipal Mayor ",
+            font=("Segoe UI", 10, "bold"),
+            fg="#1e40af",
+            bg=COLOR_CARD,
+            bd=1,
+            relief=tk.SOLID,
+            padx=12,
+            pady=8
+        )
+        m_card.pack(fill=tk.X, pady=(0, 10))
+
+        # Mayor Fields: First, Middle, Last, Suffix
+        m_f1 = tk.Frame(m_card, bg=COLOR_CARD)
+        m_f1.pack(fill=tk.X, pady=3)
+        tk.Label(m_f1, text="First Name:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_m_first = ttk.Entry(m_f1, width=22)
+        e_m_first.insert(0, raw_mayor.get("first") or "")
+        e_m_first.pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(m_f1, text="Middle Name:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_m_middle = ttk.Entry(m_f1, width=20)
+        e_m_middle.insert(0, raw_mayor.get("middle") or "")
+        e_m_middle.pack(side=tk.LEFT)
+
+        m_f2 = tk.Frame(m_card, bg=COLOR_CARD)
+        m_f2.pack(fill=tk.X, pady=3)
+        tk.Label(m_f2, text="Last Name:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_m_last = ttk.Entry(m_f2, width=22)
+        e_m_last.insert(0, raw_mayor.get("last") or "")
+        e_m_last.pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(m_f2, text="Suffix (Jr/III):", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_m_suf = ttk.Entry(m_f2, width=10)
+        e_m_suf.insert(0, raw_mayor.get("suffix") or "")
+        e_m_suf.pack(side=tk.LEFT)
+
+        m_f3 = tk.Frame(m_card, bg=COLOR_CARD)
+        m_f3.pack(fill=tk.X, pady=3)
+        tk.Label(m_f3, text="Contact No:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_m_contact = ttk.Entry(m_f3, width=22)
+        e_m_contact.insert(0, raw_mayor.get("contact") or "")
+        e_m_contact.pack(side=tk.LEFT)
+
+        m_f4 = tk.Frame(m_card, bg=COLOR_CARD)
+        m_f4.pack(fill=tk.X, pady=3)
+        tk.Label(m_f4, text="Hall Address:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_m_addr = ttk.Entry(m_f4)
+        e_m_addr.insert(0, raw_mayor.get("address") or target_rec.get("address") or "")
+        e_m_addr.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # 2. Vice Mayor Card
+        v_card = tk.LabelFrame(
+            content_frame,
+            text=" Municipal Vice-Mayor ",
+            font=("Segoe UI", 10, "bold"),
+            fg="#065f46",
+            bg=COLOR_CARD,
+            bd=1,
+            relief=tk.SOLID,
+            padx=12,
+            pady=8
+        )
+        v_card.pack(fill=tk.X, pady=(0, 10))
+
+        v_f1 = tk.Frame(v_card, bg=COLOR_CARD)
+        v_f1.pack(fill=tk.X, pady=3)
+        tk.Label(v_f1, text="First Name:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_v_first = ttk.Entry(v_f1, width=22)
+        e_v_first.insert(0, raw_vm.get("first") or "")
+        e_v_first.pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(v_f1, text="Middle Name:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_v_middle = ttk.Entry(v_f1, width=20)
+        e_v_middle.insert(0, raw_vm.get("middle") or "")
+        e_v_middle.pack(side=tk.LEFT)
+
+        v_f2 = tk.Frame(v_card, bg=COLOR_CARD)
+        v_f2.pack(fill=tk.X, pady=3)
+        tk.Label(v_f2, text="Last Name:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_v_last = ttk.Entry(v_f2, width=22)
+        e_v_last.insert(0, raw_vm.get("last") or "")
+        e_v_last.pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(v_f2, text="Suffix (Jr/III):", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_v_suf = ttk.Entry(v_f2, width=10)
+        e_v_suf.insert(0, raw_vm.get("suffix") or "")
+        e_v_suf.pack(side=tk.LEFT)
+
+        v_f3 = tk.Frame(v_card, bg=COLOR_CARD)
+        v_f3.pack(fill=tk.X, pady=3)
+        tk.Label(v_f3, text="Contact No:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_v_contact = ttk.Entry(v_f3, width=22)
+        e_v_contact.insert(0, raw_vm.get("contact") or "")
+        e_v_contact.pack(side=tk.LEFT)
+
+        v_f4 = tk.Frame(v_card, bg=COLOR_CARD)
+        v_f4.pack(fill=tk.X, pady=3)
+        tk.Label(v_f4, text="Office Address:", width=11, anchor="w", bg=COLOR_CARD, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        e_v_addr = ttk.Entry(v_f4)
+        e_v_addr.insert(0, raw_vm.get("address") or "")
+        e_v_addr.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Dialog Buttons
+        btn_frame = tk.Frame(content_frame, bg=COLOR_BG)
+        btn_frame.pack(fill=tk.X, pady=(10, 0))
+
+        save_status_lbl = tk.Label(btn_frame, text="", font=("Segoe UI", 8), fg="#059669", bg=COLOR_BG)
+        save_status_lbl.pack(side=tk.LEFT)
+
+        def do_save():
+            save_status_lbl.config(text="Saving changes to Officials_List.xlsx... please wait", fg="#2563eb")
+            edit_win.update()
+            try:
+                ok = data.update_municipality(
+                    town=target_rec["town"],
+                    province=target_rec["province"],
+                    mayor_first=e_m_first.get().strip(),
+                    mayor_middle=e_m_middle.get().strip(),
+                    mayor_last=e_m_last.get().strip(),
+                    mayor_suffix=e_m_suf.get().strip(),
+                    mayor_address=e_m_addr.get().strip(),
+                    mayor_contact=e_m_contact.get().strip(),
+                    vm_first=e_v_first.get().strip(),
+                    vm_middle=e_v_middle.get().strip(),
+                    vm_last=e_v_last.get().strip(),
+                    vm_suffix=e_v_suf.get().strip(),
+                    vm_address=e_v_addr.get().strip(),
+                    vm_contact=e_v_contact.get().strip()
+                )
+                if ok:
+                    on_filter_change()
+                    messagebox.showinfo(
+                        "Saved Successfully",
+                        f"Updated {target_rec['town']}, {target_rec['province']}!\nChanges saved directly to Officials_List.xlsx",
+                        parent=edit_win
+                    )
+                    edit_win.destroy()
+                else:
+                    messagebox.showerror("Error", "Could not save municipality changes.", parent=edit_win)
+            except Exception as ex:
+                messagebox.showerror("Save Failed", f"An error occurred while updating Excel:\n{ex}", parent=edit_win)
+            finally:
+                save_status_lbl.config(text="")
+
+        btn_save = tk.Button(
+            btn_frame,
+            text="💾 Save to Excel (.xlsx)",
+            bg=COLOR_SUCCESS,
+            fg="white",
+            font=("Segoe UI", 9, "bold"),
+            relief=tk.FLAT,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=do_save
+        )
+        btn_save.pack(side=tk.RIGHT, padx=(8, 0))
+
+        btn_cancel = ttk.Button(btn_frame, text="Cancel", command=edit_win.destroy)
+        btn_cancel.pack(side=tk.RIGHT)
+
     def show_row_details(event):
         selected_item = tree.selection()
         if not selected_item:
@@ -779,7 +1208,7 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
 
         detail_win = tk.Toplevel(root)
         detail_win.title(f"Details - {rec['Town']}, {rec['Province']}")
-        detail_win.geometry("560x390")
+        detail_win.geometry("560x400")
         detail_win.minsize(460, 320)
         detail_win.configure(bg=COLOR_BG)
         detail_win.transient(root)
@@ -809,10 +1238,26 @@ def run_gui(excel_path: str = "Officials_List.xlsx"):
             root.clipboard_append(rec["Municipal Hall Address"])
             messagebox.showinfo("Copied", "Municipal Hall Address copied to clipboard!", parent=detail_win)
 
+        ttk.Button(btn_box, text="✏️ Edit Officials", command=lambda: (detail_win.destroy(), open_edit_dialog(data.get_municipality_raw(rec["Town"], rec["Province"])))).pack(side=tk.LEFT, padx=6)
         ttk.Button(btn_box, text="Copy Address", command=copy_address).pack(side=tk.LEFT, padx=6)
         ttk.Button(btn_box, text="Close", command=detail_win.destroy).pack(side=tk.LEFT)
 
     tree.bind("<Double-1>", show_row_details)
+
+    # Right-click context menu
+    context_menu = tk.Menu(root, tearoff=0)
+    context_menu.add_command(label="✏️ Edit Officials...", command=lambda: open_edit_dialog())
+    context_menu.add_command(label="👁️ View Details...", command=lambda: show_row_details(None))
+    context_menu.add_separator()
+    context_menu.add_command(label="📋 Copy CSV Row", command=lambda: copy_to_clipboard())
+
+    def on_tree_right_click(event):
+        row_id = tree.identify_row(event.y)
+        if row_id:
+            tree.selection_set(row_id)
+            context_menu.post(event.x_root, event.y_root)
+
+    tree.bind("<Button-3>", on_tree_right_click)
 
     def export_selected_csv():
         if not current_records:
