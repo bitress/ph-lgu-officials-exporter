@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Philippine Municipal Officials Directory & Exporter</title>
+  <meta name="description" content="Search, filter, view, edit, and export Philippine municipal mayors, vice mayors, and municipal hall addresses nationwide.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- FontAwesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      --gov-primary: #1b365d;
+      --gov-secondary: #0d233a;
+      --accent-blue: #0d6efd;
+      --accent-green: #198754;
+      --accent-info: #0284c7;
+      --accent-purple: #7c3aed;
+      --card-bg: #ffffff;
+      --border-color: #dee2e6;
+    }
+
+    body {
+      background-color: #f4f6f9;
+      color: #212529;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* Government Institutional Header - Solid Flat Colors, No Gradients */
+    .navbar-gov {
+      background-color: var(--gov-primary);
+      border-bottom: 3px solid var(--gov-secondary);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+    .brand-icon-box {
+      width: 44px;
+      height: 44px;
+      background-color: #244673;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fcd34d;
+      font-size: 20px;
+    }
+
+    /* Metric Stat Cards - Solid Flat Accents */
+    .stat-card {
+      background-color: #ffffff;
+      border: 1px solid var(--border-color);
+      border-left-width: 4px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      padding: 18px 20px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    }
+    .stat-card-blue { border-left-color: var(--accent-blue); }
+    .stat-card-info { border-left-color: var(--accent-info); }
+    .stat-card-green { border-left-color: var(--accent-green); }
+    .stat-card-purple { border-left-color: var(--accent-purple); }
+
+    .stat-icon-tile {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .stat-icon-blue { background-color: #e7f1ff; color: var(--accent-blue); }
+    .stat-icon-info { background-color: #e0f2fe; color: var(--accent-info); }
+    .stat-icon-green { background-color: #dcfce7; color: var(--accent-green); }
+    .stat-icon-purple { background-color: #f3e8ff; color: var(--accent-purple); }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .stat-val {
+      font-size: 26px;
+      font-weight: 800;
+      color: #1e293b;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    /* Filters Card */
+    .card-flat {
+      background-color: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    /* Table & Scrolling */
+    .table-container {
+      max-height: 640px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+    .table-hover-custom tbody tr:hover {
+      background-color: #f1f5f9;
+    }
+    .table thead th {
+      background-color: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 2px solid #cbd5e1;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    .table thead th.no-sort {
+      cursor: default;
+    }
+    .table tbody td {
+      padding: 12px 14px;
+      vertical-align: middle;
+      font-size: 13px;
+    }
+
+    .badge-idx {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      background-color: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .contact-sub {
+      font-size: 11px;
+      color: #64748b;
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 3px;
+      display: block;
+    }
+    .addr-cell {
+      max-width: 320px;
+      line-height: 1.4;
+      color: #334155;
+    }
+
+    /* Copy Button */
+    .btn-copy {
+      padding: 2px 6px;
+      font-size: 11px;
+      color: #64748b;
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-copy:hover {
+      color: #0d6efd;
+      border-color: #0d6efd;
+      background-color: #f0f7ff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation / Header -->
+  <nav class="navbar navbar-expand-lg navbar-dark navbar-gov py-3">
+    <div class="container-fluid px-lg-4">
+      <div class="d-flex align-items-center">
+        <div class="brand-icon-box me-3">
+          <i class="fa-solid fa-building-columns"></i>
+        </div>
+        <div>
+          <h1 class="h5 mb-0 text-white fw-bold tracking-tight">Philippine Municipal Officials Directory</h1>
+          <div class="small text-white-50 mt-1 d-flex align-items-center gap-2">
+            <span>Clean Data Processing &amp; Multi-Format Exporter</span>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="cacheBadge">
+              <i class="fa-solid fa-bolt me-1"></i> Instant Cache Active
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-2 mt-3 mt-lg-0">
+        <a href="/verify" class="btn btn-outline-success btn-sm fw-semibold">
+          <i class="fa-solid fa-circle-check me-1"></i> Verify Contacts
+        </a>
+        <button class="btn btn-outline-light btn-sm fw-semibold" onclick="exportBatchAll()">
+          <i class="fa-solid fa-boxes-stacked me-1"></i> Export All 18 Regions
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-lg-4 py-4">
+
+    <!-- Stats Dashboard Cards -->
+    <div class="row g-3 mb-4" id="statsGrid">
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card-blue h-100 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="stat-label">Total LGUs</div>
+            <div class="stat-val" id="statTotal">1,633</div>
+            <div class="mt-1">
+              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle small" id="statLguBreakdown">
+                <i class="fa-solid fa-building-columns me-1"></i> 1,484 Munis • 149 Cities
+              </span>
+            </div>
+          </div>
+          <div class="stat-icon-tile stat-icon-blue">
+            <i class="fa-solid fa-city"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card-info h-100 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="stat-label">Elected Mayors</div>
+            <div class="stat-val" id="statMayors">
+              -- <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle small ms-1" id="statMayorsPct">--%</span>
+            </div>
+            <div class="mt-1">
+              <span class="badge bg-light text-muted border small">City &amp; Municipal Mayors</span>
+            </div>
+          </div>
+          <div class="stat-icon-tile stat-icon-info">
+            <i class="fa-solid fa-user-tie"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card-green h-100 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="stat-label">Elected Vice Mayors</div>
+            <div class="stat-val" id="statVMs">
+              -- <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle small ms-1" id="statVMsPct">--%</span>
+            </div>
+            <div class="mt-1">
+              <span class="badge bg-light text-muted border small">Presiding Officers</span>
+            </div>
+          </div>
+          <div class="stat-icon-tile stat-icon-green">
+            <i class="fa-solid fa-user-check"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card-purple h-100 d-flex align-items-center justify-content-between">
+          <div>
+            <div class="stat-label">Address Coverage</div>
+            <div class="stat-val" id="statAddrs">100%</div>
+            <div class="mt-1">
+              <span class="badge bg-purple-subtle text-dark border small" style="background-color:#f3e8ff;">
+                <i class="fa-solid fa-shield-halved me-1 text-primary"></i> Smart Fallback
+              </span>
+            </div>
+          </div>
+          <div class="stat-icon-tile stat-icon-purple">
+            <i class="fa-solid fa-location-dot"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter & Export Controls Card -->
+    <div class="card card-flat p-4 mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+        <h6 class="mb-0 fw-bold text-dark text-uppercase small">
+          <i class="fa-solid fa-filter me-2 text-primary"></i> Filter &amp; Search Controls
+        </h6>
+        <span class="small text-muted"><i class="fa-regular fa-keyboard me-1"></i> Press <code>/</code> to search</span>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-3 col-lg-2">
+          <label class="form-label small fw-bold text-secondary text-uppercase" for="regSelect">Region</label>
+          <select id="regSelect" class="form-select form-select-sm" onchange="onRegionChange()"></select>
+        </div>
+
+        <div class="col-md-3 col-lg-2">
+          <label class="form-label small fw-bold text-secondary text-uppercase" for="provSelect">Province</label>
+          <select id="provSelect" class="form-select form-select-sm" onchange="fetchRecords()"></select>
+        </div>
+
+        <div class="col-md-3 col-lg-2">
+          <label class="form-label small fw-bold text-secondary text-uppercase" for="lguTypeSelect">LGU Type</label>
+          <select id="lguTypeSelect" class="form-select form-select-sm" onchange="fetchRecords()">
+            <option value="all">All (Cities &amp; Municipalities)</option>
+            <option value="municipality">Municipalities Only</option>
+            <option value="city">Cities Only</option>
+          </select>
+        </div>
+
+        <div class="col-md-3 col-lg-4">
+          <label class="form-label small fw-bold text-secondary text-uppercase" for="searchInput">Search Town, Province, or Official</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-light text-muted border-end-0">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Type to filter..." oninput="onSearchInput()">
+            <button class="btn btn-outline-secondary" type="button" id="btnClearSearch" onclick="clearSearch()" style="display:none;" title="Clear search">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="col-md-2 col-lg-2">
+          <label class="form-label small fw-bold text-secondary text-uppercase" for="casingSelect">Name Casing</label>
+          <select id="casingSelect" class="form-select form-select-sm" onchange="fetchRecords()">
+            <option value="title">Title Case (Juan D. Santos Jr.)</option>
+            <option value="upper">UPPERCASE</option>
+            <option value="original">Original from File</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap align-items-center justify-content-between pt-3 mt-3 border-top gap-3">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="checkbox" id="includeLguTypeCheck" onchange="renderTable()" checked>
+            <label class="form-check-label small fw-medium" for="includeLguTypeCheck">Include LGU Type column</label>
+          </div>
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="checkbox" id="includeRegCheck" onchange="renderTable()">
+            <label class="form-check-label small fw-medium" for="includeRegCheck">Include Region column</label>
+          </div>
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="checkbox" id="includeContactsCheck" onchange="fetchRecords()">
+            <label class="form-check-label small fw-medium" for="includeContactsCheck">Include Contact Numbers &amp; Email</label>
+          </div>
+          <div class="vr mx-1" style="opacity:0.2;"></div>
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="checkbox" id="verifiedOnlyCheck">
+            <label class="form-check-label small fw-medium text-success" for="verifiedOnlyCheck">
+              <i class="fa-solid fa-circle-check me-1 text-success"></i>Export verified LGUs only
+            </label>
+          </div>
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="checkbox" id="includeVerifiedColCheck">
+            <label class="form-check-label small fw-medium" for="includeVerifiedColCheck">
+              <i class="fa-solid fa-table-columns me-1 text-secondary"></i>Include 'Contact Verified' column
+            </label>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-success btn-sm fw-semibold" onclick="downloadExport('csv')" title="Excel-compatible UTF-8 with BOM">
+            <i class="fa-solid fa-file-csv me-1"></i> Export CSV
+          </button>
+          <button class="btn btn-primary btn-sm fw-semibold" onclick="downloadExport('xlsx')" title="Styled openpyxl Excel spreadsheet">
+            <i class="fa-solid fa-file-excel me-1"></i> Export Excel (.xlsx)
+          </button>
+          <button class="btn btn-secondary btn-sm fw-semibold" onclick="downloadExport('json')" title="JSON array format">
+            <i class="fa-solid fa-file-code me-1"></i> Export JSON
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Toolbar -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+      <div class="small fw-semibold text-secondary" id="summaryText">
+        Loading officials directory...
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="small text-secondary">Show:</span>
+        <select id="pageSizeSelect" class="form-select form-select-sm w-auto" onchange="onPageSizeChange()">
+          <option value="25">25 per page</option>
+          <option value="50" selected>50 per page</option>
+          <option value="100">100 per page</option>
+          <option value="all">All</option>
+        </select>
+        <button class="btn btn-outline-secondary btn-sm" id="btnPrevPage" onclick="prevPage()">
+          <i class="fa-solid fa-chevron-left me-1"></i> Prev
+        </button>
+        <span id="pageIndicator" class="small fw-bold px-2 text-dark">1 / 1</span>
+        <button class="btn btn-outline-secondary btn-sm" id="btnNextPage" onclick="nextPage()">
+          Next <i class="fa-solid fa-chevron-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="card card-flat overflow-hidden mb-4">
+      <div class="table-container">
+        <table id="officialsTable" class="table table-hover table-striped table-hover-custom align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width: 50px;" class="no-sort text-center">#</th>
+              <th onclick="sortTable('Town')">Town / City <span class="sort-icon" id="sort_Town"><i class="fa-solid fa-sort-up text-primary ms-1"></i></span></th>
+              <th id="thLguType" onclick="sortTable('LGU Type')">Type <span class="sort-icon" id="sort_LGU_Type"></span></th>
+              <th onclick="sortTable('Province')">Province <span class="sort-icon" id="sort_Province"></span></th>
+              <th id="thRegion" style="display:none;" onclick="sortTable('Region')">Region <span class="sort-icon" id="sort_Region"></span></th>
+              <th onclick="sortTable('Mayor Name')">Mayor Name <span class="sort-icon" id="sort_Mayor_Name"></span></th>
+              <th onclick="sortTable('Vice Mayor')">Vice Mayor <span class="sort-icon" id="sort_Vice_Mayor"></span></th>
+              <th onclick="sortTable('Municipal Hall Address')">LGU Hall Address <span class="sort-icon" id="sort_Municipal_Hall_Address"></span></th>
+              <th style="width: 150px; text-align: center;" class="no-sort">Quick Tools</th>
+              <th style="width: 90px; text-align: center;" class="no-sort">Action</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Edit Officials Bootstrap 5 Modal -->
+  <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="modalTownTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light border-bottom">
+          <div>
+            <h5 class="modal-title fw-bold text-dark" id="modalTownTitle">Edit Officials</h5>
+            <div class="small text-muted" id="modalRegionSub">Updates are saved directly with automatic timestamped backup</div>
+          </div>
+          <button type="button" class="btn-close" onclick="closeModal()" aria-label="Close"></button>
+        </div>
+
+        <form id="editForm" onsubmit="submitEdit(event)">
+          <div class="modal-body p-4">
+            <input type="hidden" id="editTown">
+            <input type="hidden" id="editProvince">
+
+            <!-- Mayor Section -->
+            <div class="card mb-3 border-start border-4 border-primary border-top-0 border-end-0 border-bottom-0 bg-light">
+              <div class="card-body">
+                <h6 class="fw-bold text-primary mb-3">
+                  <i class="fa-solid fa-user-tie me-2"></i> Municipal Mayor
+                </h6>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-secondary" for="mFirst">First Name</label>
+                    <input type="text" class="form-control form-control-sm" id="mFirst">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-secondary" for="mMiddle">Middle Name</label>
+                    <input type="text" class="form-control form-control-sm" id="mMiddle">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary" for="mLast">Last Name</label>
+                    <input type="text" class="form-control form-control-sm" id="mLast">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small fw-semibold text-secondary" for="mSuffix">Suffix</label>
+                    <input type="text" class="form-control form-control-sm" id="mSuffix" placeholder="Jr., III">
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small fw-semibold text-secondary" for="mAddress">Office / Municipal Hall Address</label>
+                  <input type="text" class="form-control form-control-sm" id="mAddress">
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary" for="mContact">Contact Number</label>
+                    <input type="text" class="form-control form-control-sm" id="mContact" placeholder="e.g. 0917-123-4567">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary" for="mEmail">Email Address</label>
+                    <input type="email" class="form-control form-control-sm" id="mEmail" placeholder="e.g. mayor@example.gov.ph">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vice Mayor Section -->
+            <div class="card mb-2 border-start border-4 border-success border-top-0 border-end-0 border-bottom-0 bg-light">
+              <div class="card-body">
+                <h6 class="fw-bold text-success mb-3">
+                  <i class="fa-solid fa-user-check me-2"></i> Municipal Vice-Mayor
+                </h6>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-secondary" for="vmFirst">First Name</label>
+                    <input type="text" class="form-control form-control-sm" id="vmFirst">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-secondary" for="vmMiddle">Middle Name</label>
+                    <input type="text" class="form-control form-control-sm" id="vmMiddle">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary" for="vmLast">Last Name</label>
+                    <input type="text" class="form-control form-control-sm" id="vmLast">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small fw-semibold text-secondary" for="vmSuffix">Suffix</label>
+                    <input type="text" class="form-control form-control-sm" id="vmSuffix" placeholder="Jr., III">
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small fw-semibold text-secondary" for="vmAddress">Office Address</label>
+                  <input type="text" class="form-control form-control-sm" id="vmAddress">
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary" for="vmContact">Contact Number</label>
+                    <input type="text" class="form-control form-control-sm" id="vmContact" placeholder="e.g. 0918-987-6543">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary" for="vmEmail">Email Address</label>
+                    <input type="email" class="form-control form-control-sm" id="vmEmail" placeholder="e.g. vicemayor@example.gov.ph">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer bg-light border-top">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-success btn-sm fw-semibold" id="btnSave">
+              <i class="fa-solid fa-floppy-disk me-1"></i> Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 2050;">
+    <div id="toast" class="toast align-items-center text-bg-dark border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body d-flex align-items-center" id="toastMessage">
+          <i class="fa-solid fa-circle-info text-info me-2 fs-6" id="toastIcon"></i>
+          <span id="toastText">Action completed</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    let meta = { regions: [], provinces_by_region: {} };
+    let allRecords = [];
+    let sortCol = "Town";
+    let sortAsc = true;
+    let currentPage = 1;
+    let pageSize = 50;
+    let bsModalInstance = null;
+
+    function getModal() {
+      if (!bsModalInstance && window.bootstrap && bootstrap.Modal) {
+        bsModalInstance = bootstrap.Modal.getOrCreateInstance(document.getElementById('editModal'));
+      }
+      return bsModalInstance;
+    }
+
+    async function init() {
+      try {
+        const [metaRes, statsRes] = await Promise.all([
+          fetch('/api/meta').then(r => r.json()),
+          fetch('/api/stats').then(r => r.json())
+        ]);
+
+        meta = metaRes;
+        const totalLgus = statsRes.total_lgus || 1633;
+        const munis = statsRes.total_municipalities || 1484;
+        const cities = statsRes.total_cities || 149;
+        document.getElementById('statTotal').innerText = totalLgus.toLocaleString();
+        const breakdownEl = document.getElementById('statLguBreakdown');
+        if (breakdownEl) {
+          breakdownEl.innerHTML = `<i class="fa-solid fa-building-columns me-1"></i> ${munis.toLocaleString()} Munis • ${cities.toLocaleString()} Cities`;
+        }
+        document.getElementById('statMayors').innerHTML = `${statsRes.mayors_count.toLocaleString()} <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle small ms-1" id="statMayorsPct">${statsRes.mayor_coverage_pct}%</span>`;
+        document.getElementById('statVMs').innerHTML = `${statsRes.vice_mayors_count.toLocaleString()} <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle small ms-1" id="statVMsPct">${statsRes.vm_coverage_pct}%</span>`;
+
+        const regSelect = document.getElementById('regSelect');
+        regSelect.innerHTML = '<option value="ALL">All Regions (18 Regions)</option>' +
+          meta.regions.map(r => `<option value="${r}">${r}</option>`).join('');
+
+        onRegionChange();
+      } catch (err) {
+        console.error('Initialization error:', err);
+      }
+    }
+
+    function onRegionChange() {
+      const reg = document.getElementById('regSelect').value;
+      const provSelect = document.getElementById('provSelect');
+      let provs = [];
+      if (reg === 'ALL') {
+        const allSet = new Set();
+        Object.values(meta.provinces_by_region).forEach(arr => arr.forEach(p => allSet.add(p)));
+        provs = Array.from(allSet).sort();
+        provSelect.innerHTML = '<option value="ALL">All Provinces</option>' +
+          provs.map(p => `<option value="${p}">${p}</option>`).join('');
+      } else {
+        provs = meta.provinces_by_region[reg] || [];
+        provSelect.innerHTML = `<option value="ALL">All Provinces (${reg})</option>` +
+          provs.map(p => `<option value="${p}">${p}</option>`).join('');
+      }
+      currentPage = 1;
+      fetchRecords();
+    }
+
+    let searchTimeout = null;
+    function onSearchInput() {
+      const q = document.getElementById('searchInput').value;
+      document.getElementById('btnClearSearch').style.display = q ? 'block' : 'none';
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        currentPage = 1;
+        fetchRecords();
+      }, 200);
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('btnClearSearch').style.display = 'none';
+      currentPage = 1;
+      fetchRecords();
+    }
+
+    async function fetchRecords() {
+      const reg = document.getElementById('regSelect').value;
+      const prov = document.getElementById('provSelect').value;
+      const lguType = document.getElementById('lguTypeSelect').value;
+      const q = document.getElementById('searchInput').value;
+      const casing = document.getElementById('casingSelect').value;
+      const incContacts = document.getElementById('includeContactsCheck').checked ? '1' : '0';
+
+      const params = new URLSearchParams({
+        region: reg,
+        province: prov,
+        lgu_type: lguType,
+        q: q,
+        casing: casing,
+        include_contacts: incContacts
+      });
+
+      try {
+        const res = await fetch('/api/records?' + params.toString());
+        allRecords = await res.json();
+        renderTable();
+      } catch (err) {
+        console.error('Error fetching records:', err);
+      }
+    }
+
+    function sortTable(col) {
+      if (sortCol === col) {
+        sortAsc = !sortAsc;
+      } else {
+        sortCol = col;
+        sortAsc = true;
+      }
+      renderTable();
+    }
+
+    function renderTable() {
+      const incLguType = document.getElementById('includeLguTypeCheck').checked;
+      const incReg = document.getElementById('includeRegCheck').checked;
+      const incContacts = document.getElementById('includeContactsCheck').checked;
+      document.getElementById('thLguType').style.display = incLguType ? '' : 'none';
+      document.getElementById('thRegion').style.display = incReg ? '' : 'none';
+
+      // Sort
+      allRecords.sort((a, b) => {
+        const valA = (a[sortCol] || '').toLowerCase();
+        const valB = (b[sortCol] || '').toLowerCase();
+        return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      });
+
+      // Update sort icons with FontAwesome
+      ['Town', 'LGU_Type', 'Province', 'Region', 'Mayor_Name', 'Vice_Mayor', 'Municipal_Hall_Address'].forEach(c => {
+        const el = document.getElementById('sort_' + c);
+        if (el) {
+          const colName = c.replace(/_/g, ' ');
+          if (sortCol === colName || (c === 'LGU_Type' && sortCol === 'LGU Type') || (c === 'Mayor_Name' && sortCol === 'Mayor Name') || (c === 'Vice_Mayor' && sortCol === 'Vice Mayor') || (c === 'Municipal_Hall_Address' && sortCol === 'Municipal Hall Address')) {
+            el.innerHTML = sortAsc 
+              ? '<i class="fa-solid fa-sort-up text-primary ms-1"></i>' 
+              : '<i class="fa-solid fa-sort-down text-primary ms-1"></i>';
+          } else {
+            el.innerHTML = '<i class="fa-solid fa-sort text-secondary opacity-50 ms-1"></i>';
+          }
+        }
+      });
+
+      // Pagination
+      const total = allRecords.length;
+      const pSize = pageSize === 'all' ? total : parseInt(pageSize);
+      const totalPages = Math.max(1, Math.ceil(total / (pSize || 1)));
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const start = (currentPage - 1) * pSize;
+      const end = pageSize === 'all' ? total : Math.min(start + pSize, total);
+      const paged = allRecords.slice(start, end);
+
+      document.getElementById('summaryText').innerText = 
+        `Showing ${total > 0 ? start + 1 : 0}-${end} of ${total} LGUs`;
+      document.getElementById('pageIndicator').innerText = `${currentPage} / ${totalPages}`;
+      document.getElementById('btnPrevPage').disabled = currentPage <= 1;
+      document.getElementById('btnNextPage').disabled = currentPage >= totalPages;
+
+      const tbody = document.getElementById('tableBody');
+      if (paged.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10"class="text-center py-5 text-muted"><i class="fa-solid fa-folder-open me-2 fs-5 d-block mb-2"></i>No records match the selected filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = paged.map((r, i) => {
+        const idx = start + i + 1;
+        const mayorContact = incContacts && r['Mayor Contact'] ? `<span class="contact-sub"><i class="fa-solid fa-phone me-1 text-muted"></i>${r['Mayor Contact']}</span>` : '';
+        const mayorEmail = incContacts && r['Mayor Email'] ? `<span class="contact-sub"><i class="fa-solid fa-envelope me-1 text-muted"></i><a href="mailto:${r['Mayor Email']}" class="text-decoration-none text-secondary">${r['Mayor Email']}</a></span>` : '';
+        const vmContact = incContacts && r['Vice Mayor Contact'] ? `<span class="contact-sub"><i class="fa-solid fa-phone me-1 text-muted"></i>${r['Vice Mayor Contact']}</span>` : '';
+        const vmEmail = incContacts && r['Vice Mayor Email'] ? `<span class="contact-sub"><i class="fa-solid fa-envelope me-1 text-muted"></i><a href="mailto:${r['Vice Mayor Email']}" class="text-decoration-none text-secondary">${r['Vice Mayor Email']}</a></span>` : '';
+
+        const lguBadge = r['LGU Type'] === 'City' 
+          ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="fa-solid fa-city me-1"></i>City</span>'
+          : '<span class="badge bg-light text-secondary border"><i class="fa-solid fa-landmark me-1"></i>Muni</span>';
+
+        return `
+          <tr>
+            <td class="text-center"><span class="badge-idx">${idx}</span></td>
+            <td><strong class="text-dark">${r.Town}</strong></td>
+            ${incLguType ? `<td>${lguBadge}</td>` : ''}
+            <td><span class="text-secondary">${r.Province}</span></td>
+            ${incReg ? `<td><span class="badge bg-light text-dark border">${r.Region}</span></td>` : ''}
+            <td>
+              <span class="fw-semibold text-primary">${r['Mayor Name'] || '<span class="text-muted fst-italic">None</span>'}</span>
+              ${mayorContact}
+              ${mayorEmail}
+            </td>
+            <td>
+              <span class="fw-semibold text-success">${r['Vice Mayor'] || '<span class="text-muted fst-italic">None</span>'}</span>
+              ${vmContact}
+              ${vmEmail}
+            </td>
+            <td class="addr-cell">
+              <span>${r['Municipal Hall Address'] || '<span class="text-muted fst-italic">None</span>'}</span>
+              ${r['Municipal Hall Address'] ? `<button class="btn-copy ms-1" onclick="copyText('${escapeQuotes(r['Municipal Hall Address'])}', 'Address copied!')" title="Copy Address"><i class="fa-regular fa-copy"></i></button>` : ''}
+            </td>
+            <td class="text-center text-nowrap">
+              <button class="btn btn-outline-secondary btn-sm py-1 px-2" onclick="copyJoint(${start + i})" title="Copy mayor name, title and town/province" ${r['Mayor Name'] ? '' : 'disabled'}>
+                <i class="fa-regular fa-copy me-1"></i> Copy Joint
+              </button>
+              <button class="btn btn-outline-secondary btn-sm py-1 px-2 mt-1" onclick="searchSeal(${start + i})" title="Google search: Town Province seal">
+                <i class="fa-brands fa-google me-1"></i> Search Seal
+              </button>
+            </td>
+            <td class="text-center">
+              <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="openEditModal(${start + i})">
+                <i class="fa-solid fa-pen-to-square me-1"></i> Edit
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function escapeQuotes(str) {
+      return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    function onPageSizeChange() {
+      pageSize = document.getElementById('pageSizeSelect').value;
+      currentPage = 1;
+      renderTable();
+    }
+    function prevPage() { if (currentPage > 1) { currentPage--; renderTable(); } }
+    function nextPage() { currentPage++; renderTable(); }
+
+    function downloadExport(format) {
+      const reg = document.getElementById('regSelect').value;
+      const prov = document.getElementById('provSelect').value;
+      const lguType = document.getElementById('lguTypeSelect').value;
+      const q = document.getElementById('searchInput').value;
+      const casing = document.getElementById('casingSelect').value;
+      const incLguType = document.getElementById('includeLguTypeCheck').checked ? '1' : '0';
+      const incReg = document.getElementById('includeRegCheck').checked ? '1' : '0';
+      const incContacts = document.getElementById('includeContactsCheck').checked ? '1' : '0';
+      const verifiedOnly = document.getElementById('verifiedOnlyCheck') && document.getElementById('verifiedOnlyCheck').checked ? '1' : '0';
+      const incVerifiedCol = document.getElementById('includeVerifiedColCheck') && document.getElementById('includeVerifiedColCheck').checked ? '1' : '0';
+
+      const params = new URLSearchParams({
+        format: format,
+        region: reg,
+        province: prov,
+        lgu_type: lguType,
+        q: q,
+        casing: casing,
+        include_lgu_type: incLguType,
+        include_region: incReg,
+        include_contacts: incContacts,
+        verified_only: verifiedOnly,
+        include_verified_col: incVerifiedCol
+      });
+      window.location.href = '/api/export?' + params.toString();
+    }
+
+    async function exportBatchAll() {
+      const lguType = document.getElementById('lguTypeSelect').value;
+      const incLguType = document.getElementById('includeLguTypeCheck').checked ? '1' : '0';
+      if (!confirm(`This will batch export all 18 regions (${lguType}) into separate CSV files inside an 'exports/' directory on your machine. Proceed?`)) return;
+      try {
+        const params = new URLSearchParams({ lgu_type: lguType, include_lgu_type: incLguType });
+        const res = await fetch('/api/batch-export?' + params.toString());
+        const data = await res.json();
+        showToast(`Generated ${data.files_count} regional files in exports/ folder!`, 'success');
+      } catch (e) {
+        showToast("Error generating batch exports.", 'error');
+      }
+    }
+
+    function openEditModal(index) {
+      const r = allRecords[index];
+      if (!r) return;
+
+      document.getElementById('editTown').value = r.Town;
+      document.getElementById('editProvince').value = r.Province;
+      document.getElementById('modalTownTitle').innerText = `Edit Officials: ${r.Town}, ${r.Province}`;
+      document.getElementById('modalRegionSub').innerText = `Region: ${r.Region} • Updates are saved directly with automatic backup`;
+
+      const m = r.raw_mayor || {};
+      const vm = r.raw_vm || {};
+
+      document.getElementById('mFirst').value = m.first || '';
+      document.getElementById('mMiddle').value = m.middle || '';
+      document.getElementById('mLast').value = m.last || '';
+      document.getElementById('mSuffix').value = m.suffix || '';
+      document.getElementById('mAddress').value = m.address || r['Municipal Hall Address'] || '';
+      document.getElementById('mContact').value = m.contact || '';
+      document.getElementById('mEmail').value = m.email || r['Mayor Email'] || '';
+
+      document.getElementById('vmFirst').value = vm.first || '';
+      document.getElementById('vmMiddle').value = vm.middle || '';
+      document.getElementById('vmLast').value = vm.last || '';
+      document.getElementById('vmSuffix').value = vm.suffix || '';
+      document.getElementById('vmAddress').value = vm.address || '';
+      document.getElementById('vmContact').value = vm.contact || '';
+      document.getElementById('vmEmail').value = vm.email || r['Vice Mayor Email'] || '';
+
+      const modal = getModal();
+      if (modal) {
+        modal.show();
+      } else {
+        document.getElementById('editModal').style.display = 'block';
+      }
+    }
+
+    function closeModal() {
+      const modal = getModal();
+      if (modal) {
+        modal.hide();
+      } else {
+        document.getElementById('editModal').style.display = 'none';
+      }
+    }
+
+    async function submitEdit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSave');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Saving...';
+
+      const payload = {
+        town: document.getElementById('editTown').value,
+        province: document.getElementById('editProvince').value,
+        mayor_first: document.getElementById('mFirst').value,
+        mayor_middle: document.getElementById('mMiddle').value,
+        mayor_last: document.getElementById('mLast').value,
+        mayor_suffix: document.getElementById('mSuffix').value,
+        mayor_address: document.getElementById('mAddress').value,
+        mayor_contact: document.getElementById('mContact').value,
+        mayor_email: document.getElementById('mEmail').value,
+        vm_first: document.getElementById('vmFirst').value,
+        vm_middle: document.getElementById('vmMiddle').value,
+        vm_last: document.getElementById('vmLast').value,
+        vm_suffix: document.getElementById('vmSuffix').value,
+        vm_address: document.getElementById('vmAddress').value,
+        vm_contact: document.getElementById('vmContact').value,
+        vm_email: document.getElementById('vmEmail').value,
+      };
+
+      try {
+        const res = await fetch('/api/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeModal();
+          showToast(`Successfully updated ${payload.town}!`, 'success');
+          await fetchRecords();
+        } else {
+          alert('Could not save update: ' + (result.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Error: ' + err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i> Save Changes';
+      }
+    }
+
+    function copyText(text, msg = 'Copied to clipboard!') {
+      navigator.clipboard.writeText(text);
+      showToast(msg, 'info');
+    }
+
+    function copyJoint(index) {
+      const r = allRecords[index];
+      if (!r || !r['Mayor Name']) return;
+      const name = r['Mayor Name'].toUpperCase();
+      const title = r['LGU Type'] === 'City' ? 'City Mayor' : 'Municipal Mayor';
+      const place = `${r.Town}, ${r.Province}`;
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `<b>${esc(name)}</b><br>${esc(title)}<br>${esc(place)}`;
+      const plain = `${name}\n${title}\n${place}`;
+
+      const done = () => showToast('Mayor details copied!', 'success');
+      const fallback = () => { navigator.clipboard.writeText(plain).then(done); };
+      if (window.ClipboardItem && navigator.clipboard.write) {
+        navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([plain], { type: 'text/plain' })
+        })]).then(done).catch(fallback);
+      } else {
+        fallback();
+      }
+    }
+
+    function searchSeal(index) {
+      const r = allRecords[index];
+      if (!r) return;
+      const q = `${r.Town} ${r.Province} seal`;
+      window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
+    }
+
+    function showToast(msg, type = 'info') {
+      const toastEl = document.getElementById('toast');
+      const textEl = document.getElementById('toastText');
+      const iconEl = document.getElementById('toastIcon');
+
+      if (textEl) textEl.innerText = msg;
+      if (iconEl) {
+        if (type === 'success') {
+          iconEl.className = 'fa-solid fa-circle-check text-success me-2 fs-6';
+        } else if (type === 'error') {
+          iconEl.className = 'fa-solid fa-circle-exclamation text-danger me-2 fs-6';
+        } else {
+          iconEl.className = 'fa-solid fa-circle-info text-info me-2 fs-6';
+        }
+      }
+
+      if (window.bootstrap && bootstrap.Toast) {
+        const bsToast = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 3200 });
+        bsToast.show();
+      } else {
+        toastEl.style.display = 'block';
+        setTimeout(() => { toastEl.style.display = 'none'; }, 3200);
+      }
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        document.getElementById('searchInput').focus();
+      } else if (e.key === 'Escape') {
+        closeModal();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

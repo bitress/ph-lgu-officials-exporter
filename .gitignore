@@ -20,3 +20,12 @@ ENV/
 .idea/
 *.swp
 *.swo
+
+# App caches and generated files
+.officials_cache.json
+.*_cache.json
+backups/
+exports/
+logs/
+*.log
+
