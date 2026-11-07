@@ -1,6 +1,6 @@
 # 🏛️ Philippine Local Government Officials Directory & Multi-Format Exporter
 
-A high-performance Python application designed to process, search, edit, and export 2025–2028 elected officials from `officials_2025_2028.xlsx` (and `.csv`) into clean, Excel-compatible CSV, styled Excel (`.xlsx`), and JSON files.
+A high-performance Python application designed to process, search, edit, and export 2025–2028 elected officials from `data/officials_2025_2028.xlsx` (and `.csv`) into clean, Excel-compatible CSV, styled Excel (`.xlsx`), and JSON files.
 
 ---
 
@@ -28,10 +28,10 @@ A high-performance Python application designed to process, search, edit, and exp
   - **Excel (`.xlsx`)**: Formatted workbook with dark navy headers, bold white text, zebra rows, freeze panes, and auto-adjusted column widths.
   - **JSON**: Formatted UTF-8 JSON for developers and APIs.
 - **Safety First**:
-  - **Rolling Timestamped Backups**: Every update creates an automatic snapshot in `backups/officials_2025_2028_YYYYMMDD_HHMMSS.xlsx` before modifying the spreadsheet.
+  - **Rolling Timestamped Backups**: Every update creates an automatic snapshot in `data/backups/officials_2025_2028_YYYYMMDD_HHMMSS.xlsx` before modifying the spreadsheet.
 - **Four Ways to Run**:
   1. **Native Desktop GUI** (Tkinter with LGU Type dropdown, live search, auto-fit columns, keyboard shortcuts, and one-click export).
-  2. **Double-click Launcher** (`run_app.bat` with auto-dependency check).
+  2. **Double-click Launcher** (`scripts/run_app.bat` with auto-dependency check).
   3. **Modern Web App** (`python app.py --web` built with Bootstrap 5, FontAwesome, LGU Type filter, pagination, metrics cards, and column sorting).
   4. **Command Line (CLI)** for automated scripting and data auditing.
 
@@ -42,9 +42,9 @@ A high-performance Python application designed to process, search, edit, and exp
 ### Method 1: Double-Click Desktop Launcher
 Simply double-click:
 ```
-run_app.bat
+scriptsun_app.bat
 ```
-This automatically verifies Python and `openpyxl`, then opens the desktop GUI immediately.
+This automatically verifies Python and the required packages, then opens the desktop GUI immediately.
 
 ---
 
@@ -144,13 +144,15 @@ python -m unittest discover tests
 | File / Folder | Purpose |
 |---|---|
 | [`app.py`](app.py) | Main application entry point (Desktop GUI, CLI, & Web server) |
-| [`data_processor.py`](data_processor.py) | Data parsing engine, caching, address fallback, and multi-format exporters |
-| [`templates/index.html`](templates/index.html) | Bootstrap 5 & FontAwesome web UI with metrics dashboard, pagination, and sorting |
-| [`run_app.bat`](run_app.bat) | Windows 1-click launcher with dependency verification |
-| [`officials_2025_2028.xlsx`](officials_2025_2028.xlsx) | Primary dataset containing Philippine 2025–2028 elected officials (1,633 LGUs: 1,484 municipalities + 149 cities) |
-| [`officials_2025_2028.csv`](officials_2025_2028.csv) | Raw CSV dataset (17,778 rows) across all 18 regions |
-| [`requirements.txt`](requirements.txt) | Python dependencies (`openpyxl`) |
+| [`requirements.txt`](requirements.txt) | Python dependencies (`openpyxl`, `docxtpl`, `docxcompose`) |
+| [`lgu/data_processor.py`](lgu/data_processor.py) | Data parsing engine, caching, address fallback, and multi-format exporters |
+| [`lgu/word_templates.py`](lgu/word_templates.py) | Word (.docx) template auto-fill and merging |
+| [`lgu/scrape.py`](lgu/scrape.py) | Downloads the latest dataset CSV into `data/` |
+| [`templates/`](templates/) | Web UI pages (`index.html`, `verify.html`) |
+| [`scripts/`](scripts/) | Windows launchers: `run_app.bat`, `manage_server.bat`, `keep_alive.bat`, `install_service.ps1`, `start_web_server.vbs` |
 | `tests/` | Automated unit tests and web integration tests |
-| `backups/` | Automated rolling timestamped backups of `officials_2025_2028.xlsx` |
+| `data/` | Dataset (`officials_2025_2028.xlsx` / `.csv`), `verification_status.json`, and app-generated files below |
+| `data/seals/`, `data/word_templates/` | Manually added LGU seals and uploaded Word templates (git-ignored) |
+| `data/backups/`, `data/logs/` | Rolling timestamped backups of the dataset, and web server logs (git-ignored) |
+| `data/.officials_2025_2028_cache.json` | Local high-speed startup cache (auto-generated) |
 | `exports/` | Destination folder for regional batch exports |
-| `.officials_2025_2028_cache.json` | Local high-speed startup cache (auto-generated) |

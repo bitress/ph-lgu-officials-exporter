@@ -5,12 +5,13 @@
 Dim fso, scriptDir, pythonwExe, appScript, logFile, logDir, sh, cmd
 
 Set fso       = CreateObject("Scripting.FileSystemObject")
-scriptDir     = fso.GetParentFolderName(WScript.ScriptFullName)
+scriptDir     = fso.GetParentFolderName(fso.GetParentFolderName(WScript.ScriptFullName))  ' project root (this file lives in scripts\)
 appScript     = scriptDir & "\app.py"
-logDir        = scriptDir & "\logs"
+logDir        = scriptDir & "\data\logs"
 logFile       = logDir    & "\web_server.log"
 
 ' Ensure logs folder exists (silently ignore if already exists)
+If Not fso.FolderExists(scriptDir & "\data") Then fso.CreateFolder(scriptDir & "\data")
 If Not fso.FolderExists(logDir) Then fso.CreateFolder(logDir)
 
 ' Use pythonw.exe (no console). Path is patched by install_service.ps1 at install time.

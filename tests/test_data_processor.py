@@ -15,7 +15,7 @@ WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
-from data_processor import (
+from lgu.data_processor import (
     OfficialsData,
     clean_token,
     clean_suffix,
@@ -31,7 +31,7 @@ class TestDataProcessor(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.excel_path = os.path.join(WORKSPACE_DIR, "officials_2025_2028.xlsx")
+        cls.excel_path = os.path.join(WORKSPACE_DIR, "data", "officials_2025_2028.xlsx")
         cls.data = OfficialsData(cls.excel_path)
         cls.data.load()
 

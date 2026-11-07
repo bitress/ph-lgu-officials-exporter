@@ -1,7 +1,7 @@
 @echo off
 :: manage_server.bat - Quick control for the PH LGU web server task
 :: Double-click, or run from command line: manage_server.bat [start|stop|restart|status|logs|open]
-cd /d "%~dp0"
+cd /d "%~dp0.."
 set TASK=PHLGUOfficials-WebServer
 set PORT=8000
 set HAS_ARG=0
@@ -78,10 +78,10 @@ if %ERRORLEVEL% NEQ 0 echo (no process listening on port %PORT%)
 exit /b 0
 
 :LOGS
-if exist "logs\web_server.log" (
-    type "logs\web_server.log" | more
+if exist "data\logs\web_server.log" (
+    type "data\logs\web_server.log" | more
 ) else (
-    echo No log file found at logs\web_server.log
+    echo No log file found at data\logs\web_server.log
 )
 exit /b 0
 

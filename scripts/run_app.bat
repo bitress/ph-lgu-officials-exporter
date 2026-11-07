@@ -1,6 +1,6 @@
 @echo off
 title Philippine Municipal Officials Directory & Multi-Format Exporter
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 :: 1. Check Python installation
 where python >nul 2>&1
@@ -16,8 +16,8 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-:: 2. Check for required dependencies (openpyxl)
-python -c "import openpyxl" >nul 2>&1
+:: 2. Check for required dependencies (openpyxl, docxtpl)
+python -c "import openpyxl, docxtpl, docxcompose" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo Installing required packages from requirements.txt...

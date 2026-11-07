@@ -10,9 +10,10 @@ param(
     [switch]$Uninstall
 )
 
-$AppDir      = Split-Path -Parent $MyInvocation.MyCommand.Path
-$VbsLauncher = Join-Path $AppDir "start_web_server.vbs"
-$LogDir      = Join-Path $AppDir "logs"
+$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
+$AppDir      = Split-Path -Parent $ScriptDir   # project root (this script lives in scripts\)
+$VbsLauncher = Join-Path $ScriptDir "start_web_server.vbs"
+$LogDir      = Join-Path $AppDir "data\logs"
 $RegPath     = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $RegName     = "PHLGUOfficials"
 
@@ -47,16 +48,16 @@ try {
     exit 1
 }
 
-# --- Pre-flight: openpyxl ---
-$ok = & python -c "import openpyxl; print('ok')" 2>&1
+# --- Pre-flight: openpyxl + docxtpl ---
+$ok = & python -c "import openpyxl, docxtpl, docxcompose; print('ok')" 2>&1
 if ($ok -ne "ok") {
-    Write-Host "[INFO] Installing openpyxl..." -ForegroundColor Yellow
-    & pip install openpyxl -q
+    Write-Host "[INFO] Installing openpyxl + docxtpl..." -ForegroundColor Yellow
+    & pip install -r (Join-Path $AppDir "requirements.txt") -q
 }
 
 # --- Ensure logs directory exists ---
 if (-not (Test-Path $LogDir)) {
-    New-Item -ItemType Directory -Path $LogDir | Out-Null
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
     Write-Host "[OK] Created logs directory." -ForegroundColor Green
 }
 

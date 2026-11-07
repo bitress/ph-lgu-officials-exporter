@@ -17,6 +17,9 @@
   <!-- FontAwesome 6 Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
+  <!-- Cropper.js (seal cropping) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+
   <style>
     :root {
       --gov-primary: #1b365d;
@@ -182,6 +185,52 @@
       color: #0d6efd;
       border-color: #0d6efd;
       background-color: #f0f7ff;
+    }
+
+    /* LGU Seals */
+    .seal-thumb {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      border: 1px solid #e2e8f0;
+      border-radius: 50%;
+      background-color: #ffffff;
+      cursor: pointer;
+      display: block;
+      margin: 0 auto 4px;
+    }
+    .seal-thumb:hover { border-color: #0d6efd; }
+    .seal-drop {
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      background-color: #f8fafc;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      padding: 16px;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    .seal-drop.dragover, .seal-drop:hover {
+      border-color: #0d6efd;
+      background-color: #f0f7ff;
+    }
+    .seal-crop-wrap {
+      height: 340px;
+      background-color: #f1f5f9;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .seal-crop-wrap img { display: block; max-width: 100%; }
+    #sealCropArea.circle .cropper-view-box,
+    #sealCropArea.circle .cropper-face { border-radius: 50%; }
+    .seal-drop img {
+      max-width: 180px;
+      max-height: 180px;
+      object-fit: contain;
     }
   </style>
 </head>
@@ -379,6 +428,9 @@
           <button class="btn btn-secondary btn-sm fw-semibold" onclick="downloadExport('json')" title="JSON array format">
             <i class="fa-solid fa-file-code me-1"></i> Export JSON
           </button>
+          <button class="btn btn-outline-primary btn-sm fw-semibold" onclick="openWordModal()" title="Auto-fill a custom Word (.docx) template">
+            <i class="fa-solid fa-file-word me-1"></i> Word Template
+          </button>
         </div>
       </div>
     </div>
@@ -542,6 +594,142 @@
     </div>
   </div>
 
+  <!-- Seal Modal -->
+  <div class="modal fade" id="sealModal" tabindex="-1" aria-labelledby="sealModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light border-bottom">
+          <div>
+            <h5 class="modal-title fw-bold text-dark" id="sealModalTitle">Seal</h5>
+            <div class="small text-muted">Choose a file, drag &amp; drop, paste (Ctrl+V), or enter an image URL</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div id="sealPickArea">
+            <div id="sealDrop" class="seal-drop" onclick="document.getElementById('sealFile').click()">
+              <div id="sealDropContent"></div>
+            </div>
+            <div class="text-center mt-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btnStartCrop" onclick="startSealCrop()">
+                <i class="fa-solid fa-crop-simple me-1"></i> Crop
+              </button>
+            </div>
+            <input type="file" id="sealFile" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="d-none" onchange="onSealFile(this.files[0])">
+            <label class="form-label small fw-semibold mt-3 mb-1" for="sealUrl">Or image URL</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="fa-solid fa-link"></i></span>
+              <input type="url" id="sealUrl" class="form-control" placeholder="https://example.com/seal.png" oninput="onSealUrlInput()">
+            </div>
+            <div class="small text-muted mt-2" id="sealMetaText"></div>
+          </div>
+
+          <div id="sealCropArea" class="d-none">
+            <div class="seal-crop-wrap">
+              <img id="sealCropImg" alt="Crop seal">
+            </div>
+            <div class="d-flex flex-wrap gap-1 justify-content-center mt-2">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Aspect ratio">
+                <button type="button" class="btn btn-outline-secondary active" data-ratio="1" onclick="setCropRatio(1, this)">1:1</button>
+                <button type="button" class="btn btn-outline-secondary" data-ratio="NaN" onclick="setCropRatio(NaN, this)">Free</button>
+              </div>
+              <div class="btn-group btn-group-sm" role="group" aria-label="Transform">
+                <button type="button" class="btn btn-outline-secondary" onclick="sealCropper && sealCropper.rotate(-90)" title="Rotate left"><i class="fa-solid fa-rotate-left"></i></button>
+                <button type="button" class="btn btn-outline-secondary" onclick="sealCropper && sealCropper.rotate(90)" title="Rotate right"><i class="fa-solid fa-rotate-right"></i></button>
+                <button type="button" class="btn btn-outline-secondary" onclick="sealCropper && sealCropper.zoom(0.1)" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button type="button" class="btn btn-outline-secondary" onclick="sealCropper && sealCropper.zoom(-0.1)" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                <button type="button" class="btn btn-outline-secondary" onclick="sealCropper && sealCropper.reset()" title="Reset"><i class="fa-solid fa-arrows-rotate"></i></button>
+              </div>
+              <div class="form-check form-check-inline ms-2 align-self-center mb-0" title="Make everything outside the circle transparent">
+                <input class="form-check-input" type="checkbox" id="sealCropCircle">
+                <label class="form-check-label small" for="sealCropCircle">Circle</label>
+              </div>
+            </div>
+            <div class="d-flex justify-content-center gap-2 mt-3">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cancelSealCrop()">Cancel Crop</button>
+              <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="applySealCrop()">
+                <i class="fa-solid fa-check me-1"></i> Apply Crop
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-top d-flex justify-content-between">
+          <button type="button" class="btn btn-outline-danger btn-sm" id="btnRemoveSeal" onclick="removeSeal()">
+            <i class="fa-solid fa-trash me-1"></i> Remove
+          </button>
+          <div>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-success btn-sm fw-semibold" id="btnSaveSeal" onclick="saveSeal()">
+              <i class="fa-solid fa-floppy-disk me-1"></i> Save Seal
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Word Template Modal -->
+  <div class="modal fade" id="wordModal" tabindex="-1" aria-labelledby="wordModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light border-bottom">
+          <div>
+            <h5 class="modal-title fw-bold text-dark" id="wordModalTitle"><i class="fa-solid fa-file-word text-primary me-2"></i>Word Template Auto-Fill</h5>
+            <div class="small text-muted">Put placeholders like <code>{{ mayor_name }}</code> or <code>{{ seal }}</code> in a .docx — each LGU gets its own filled copy</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="document.getElementById('wordFile').click()">
+              <i class="fa-solid fa-upload me-1"></i> Upload .docx Template
+            </button>
+            <a class="btn btn-outline-secondary btn-sm" href="/api/word-templates/sample">
+              <i class="fa-solid fa-download me-1"></i> Download Sample Template
+            </a>
+            <input type="file" id="wordFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="d-none" onchange="uploadWordTemplate(this.files[0])">
+          </div>
+
+          <div class="small fw-bold text-secondary text-uppercase mb-2">Your templates</div>
+          <div id="wordTemplateList" class="list-group mb-3"></div>
+
+          <div class="row g-3 align-items-end mb-3">
+            <div class="col-sm-3">
+              <label class="form-label small fw-semibold mb-1" for="wordSealWidth">Seal width (in)</label>
+              <input type="number" id="wordSealWidth" class="form-control form-control-sm" min="0.2" max="8" step="0.1" value="1" onchange="saveWordPrefs()">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label small fw-semibold mb-1" for="wordBatchMode">Output</label>
+              <select id="wordBatchMode" class="form-select form-select-sm" onchange="saveWordPrefs()">
+                <option value="single">Single .docx (all LGUs)</option>
+                <option value="province">One .docx per province (ZIP)</option>
+              </select>
+            </div>
+            <div class="col-sm-5 text-sm-end">
+              <button type="button" class="btn btn-success btn-sm fw-semibold" id="btnWordBatch" onclick="fillWordBatch()">
+                <i class="fa-solid fa-file-word me-1"></i> Fill Filtered LGUs
+              </button>
+            </div>
+            <div class="col-12 small text-muted mt-1">One LGU per page, sorted by province then town. Uses current filters, search &amp; Name Casing<span id="wordVerifiedNote"></span></div>
+          </div>
+
+          <details>
+            <summary class="small fw-bold text-secondary text-uppercase">Placeholder reference (click to copy)</summary>
+            <div class="table-responsive mt-2">
+              <table class="table table-sm small mb-0">
+                <tbody id="wordPlaceholderTable"></tbody>
+              </table>
+            </div>
+            <div class="small text-muted mt-2">
+              Type placeholders directly in Word (headers, footers and tables work too). Jinja logic is supported, e.g.
+              <code>{% if vice_mayor %}VM: {{ vice_mayor }}{% endif %}</code>. Put <code>{{ seal }}</code> on its own line for the seal image.
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 2050;">
     <div id="toast" class="toast align-items-center text-bg-dark border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
@@ -557,6 +745,7 @@
 
   <!-- Bootstrap 5 Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 
   <script>
     let meta = { regions: [], provinces_by_region: {} };
@@ -598,6 +787,7 @@
           meta.regions.map(r => `<option value="${r}">${r}</option>`).join('');
 
         onRegionChange();
+        loadWordTemplates();
       } catch (err) {
         console.error('Initialization error:', err);
       }
@@ -658,7 +848,7 @@
       });
 
       try {
-        const res = await fetch('/api/records?' + params.toString());
+        const [res] = await Promise.all([fetch('/api/records?' + params.toString()), loadSeals()]);
         allRecords = await res.json();
         renderTable();
       } catch (err) {
@@ -737,6 +927,7 @@
         const lguBadge = r['LGU Type'] === 'City' 
           ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="fa-solid fa-city me-1"></i>City</span>'
           : '<span class="badge bg-light text-secondary border"><i class="fa-solid fa-landmark me-1"></i>Muni</span>';
+        const seal = sealMap[sealKey(r)];
 
         return `
           <tr>
@@ -766,6 +957,15 @@
               <button class="btn btn-outline-secondary btn-sm py-1 px-2 mt-1" onclick="searchSeal(${start + i})" title="Google search: Town Province seal">
                 <i class="fa-brands fa-google me-1"></i> Search Seal
               </button>
+              <button class="btn btn-outline-secondary btn-sm py-1 px-2 mt-1" onclick="fillWordOne(${start + i})" title="${activeWordTemplate() ? 'Fill ' + escapeQuotes(activeWordTemplate()) : 'Choose a Word template first'}">
+                <i class="fa-solid fa-file-word me-1"></i> Fill Template
+              </button>
+              <div class="mt-2">
+                ${seal ? `<img src="${sealUrl(seal)}" class="seal-thumb" alt="Seal of ${escapeQuotes(r.Town)}" title="Click to copy seal image" onclick="copySeal(${start + i})" loading="lazy">` : ''}
+                <button class="btn btn-sm py-1 px-2 ${seal ? 'btn-outline-secondary' : 'btn-outline-primary'}" onclick="openSealModal(${start + i})" title="${seal ? 'Change or remove seal' : 'Manually add seal image'}">
+                  <i class="fa-solid ${seal ? 'fa-image' : 'fa-plus'} me-1"></i> ${seal ? 'Change Seal' : 'Add Seal'}
+                </button>
+              </div>
             </td>
             <td class="text-center">
               <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="openEditModal(${start + i})">
@@ -956,6 +1156,516 @@
       const q = `${r.Town} ${r.Province} seal`;
       window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
     }
+
+    // ---------- Manual seals ----------
+    // fetch() + JSON parse with a readable error when the server sends nothing / non-JSON
+    // (typically a server process started before an update: new page, old backend).
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, opts);
+      const text = await res.text();
+      if (!text) {
+        throw new Error(res.status === 404
+          ? 'this server does not support this feature yet — restart the LGU server on the computer hosting it (and run pip install -r requirements.txt there)'
+          : `server returned HTTP ${res.status} with no data`);
+      }
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`server returned HTTP ${res.status} with an unexpected response`);
+      }
+    }
+    let sealMap = {};
+    let sealTarget = null;     // record being edited in the seal modal
+    let sealPending = null;    // data URL of a newly chosen image
+    let bsSealModal = null;
+
+    const sealKey = r => `${r.Province}|${r.Town}`;
+    const sealUrl = s => `/seals/${encodeURIComponent(s.file)}?v=${encodeURIComponent(s.updated || '')}`;
+
+    async function loadSeals() {
+      try {
+        sealMap = await fetchJson('/api/seals');
+      } catch (e) {
+        sealMap = {};
+      }
+    }
+
+    function getSealModal() {
+      if (!bsSealModal && window.bootstrap && bootstrap.Modal) {
+        bsSealModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('sealModal'));
+      }
+      return bsSealModal;
+    }
+
+    function renderSealPreview(src) {
+      const el = document.getElementById('sealDropContent');
+      el.innerHTML = src
+        ? `<img src="${src}" alt="Seal preview" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'text-danger small', innerText: 'Preview unavailable — the server will still try to download it.'}))"><div class="small text-muted mt-2">Click to choose a different image</div>`
+        : `<i class="fa-solid fa-cloud-arrow-up fs-2 text-secondary mb-2"></i>
+           <div class="fw-semibold text-dark">Drop seal image here</div>
+           <div class="small text-muted">or click to browse • PNG, JPG, GIF, WEBP, SVG • max 5 MB</div>`;
+      document.getElementById('btnStartCrop').disabled = !src;
+    }
+
+    // ---------- Seal cropping (Cropper.js) ----------
+    let sealCropper = null;
+
+    // Returns a same-origin image source for the current seal so the canvas can export it
+    async function getCropSource() {
+      if (sealPending) return sealPending;
+      const url = document.getElementById('sealUrl').value.trim();
+      if (url) {
+        const res = await fetch('/api/seal-proxy?url=' + encodeURIComponent(url));
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.status === 404 ? 'this server does not support this feature yet — restart the LGU server' : `HTTP ${res.status}` }));
+          throw new Error(err.error || 'Could not download image');
+        }
+        const blob = await res.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+      const existing = sealTarget && sealMap[sealKey(sealTarget)];
+      return existing ? sealUrl(existing) : null;
+    }
+
+    async function startSealCrop() {
+      if (!window.Cropper) { showToast('Crop tool failed to load (check internet connection).', 'error'); return; }
+      const btn = document.getElementById('btnStartCrop');
+      btn.disabled = true;
+      try {
+        const src = await getCropSource();
+        if (!src) { showToast('Choose an image first.', 'error'); return; }
+        const img = document.getElementById('sealCropImg');
+        destroySealCropper();
+        img.src = src;
+        await img.decode();
+        document.getElementById('sealPickArea').classList.add('d-none');
+        document.getElementById('sealCropArea').classList.remove('d-none');
+        document.getElementById('btnSaveSeal').disabled = true;
+        const ratioBtn = document.querySelector('#sealCropArea [data-ratio="1"]');
+        setCropRatio(1, ratioBtn, false);
+        sealCropper = new Cropper(img, {
+          aspectRatio: 1,
+          viewMode: 1,
+          dragMode: 'move',
+          autoCropArea: 0.9,
+          background: true,
+          responsive: true,
+          checkCrossOrigin: false,
+        });
+      } catch (err) {
+        showToast('Could not start crop: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function setCropRatio(ratio, el, apply = true) {
+      document.querySelectorAll('#sealCropArea [data-ratio]').forEach(b => b.classList.toggle('active', b === el));
+      if (apply && sealCropper) sealCropper.setAspectRatio(ratio);
+    }
+
+    function destroySealCropper() {
+      if (sealCropper) { sealCropper.destroy(); sealCropper = null; }
+    }
+
+    function cancelSealCrop() {
+      destroySealCropper();
+      document.getElementById('sealCropArea').classList.add('d-none');
+      document.getElementById('sealPickArea').classList.remove('d-none');
+      document.getElementById('btnSaveSeal').disabled = false;
+    }
+
+    function applySealCrop() {
+      if (!sealCropper) return;
+      let canvas = sealCropper.getCroppedCanvas({
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
+      });
+      if (!canvas) { showToast('Could not crop image.', 'error'); return; }
+      if (document.getElementById('sealCropCircle').checked) {
+        const out = document.createElement('canvas');
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const ctx = out.getContext('2d');
+        ctx.beginPath();
+        ctx.ellipse(out.width / 2, out.height / 2, out.width / 2, out.height / 2, 0, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(canvas, 0, 0);
+        canvas = out;
+      }
+      sealPending = canvas.toDataURL('image/png');
+      document.getElementById('sealUrl').value = '';
+      cancelSealCrop();
+      renderSealPreview(sealPending);
+      document.getElementById('sealMetaText').innerText = `Cropped to ${canvas.width}×${canvas.height}px — click Save Seal to keep it.`;
+    }
+
+    function openSealModal(index) {
+      const r = allRecords[index];
+      if (!r) return;
+      sealTarget = r;
+      sealPending = null;
+      cancelSealCrop();
+      const existing = sealMap[sealKey(r)];
+      document.getElementById('sealModalTitle').innerText = `Seal: ${r.Town}, ${r.Province}`;
+      document.getElementById('sealUrl').value = '';
+      document.getElementById('sealFile').value = '';
+      document.getElementById('btnRemoveSeal').style.visibility = existing ? 'visible' : 'hidden';
+      document.getElementById('sealMetaText').innerText = existing
+        ? `Current seal added ${existing.updated || ''}${existing.source && existing.source !== 'upload' ? ' from ' + existing.source : ''}`
+        : '';
+      renderSealPreview(existing ? sealUrl(existing) : null);
+      const m = getSealModal();
+      if (m) m.show();
+    }
+
+    function onSealFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { showToast('Please choose an image file.', 'error'); return; }
+      if (file.size > 5 * 1024 * 1024) { showToast('Image too large (max 5 MB).', 'error'); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        cancelSealCrop();
+        sealPending = reader.result;
+        document.getElementById('sealUrl').value = '';
+        renderSealPreview(sealPending);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function onSealUrlInput() {
+      const url = document.getElementById('sealUrl').value.trim();
+      if (url) {
+        sealPending = null;
+        renderSealPreview(url);
+      }
+    }
+
+    async function saveSeal() {
+      if (!sealTarget) return;
+      const url = document.getElementById('sealUrl').value.trim();
+      if (!sealPending && !url) { showToast('Choose, paste, or link a seal image first.', 'error'); return; }
+      const btn = document.getElementById('btnSaveSeal');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Saving...';
+      try {
+        // Always upload image data; formats Word can't embed (SVG, WEBP) are converted to PNG
+        const src = sealPending || await getCropSource();
+        const body = {
+          town: sealTarget.Town,
+          province: sealTarget.Province,
+          image: await toDocxFriendlyImage(src),
+          source: sealPending ? 'upload' : url,
+        };
+        const result = await fetchJson('/api/seal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!result.success) throw new Error(result.error || 'Unknown error');
+        await loadSeals();
+        renderTable();
+        getSealModal() && getSealModal().hide();
+        showToast(`Seal saved for ${sealTarget.Town}!`, 'success');
+      } catch (err) {
+        showToast('Could not save seal: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i> Save Seal';
+      }
+    }
+
+    async function removeSeal() {
+      if (!sealTarget || !confirm(`Remove the seal for ${sealTarget.Town}, ${sealTarget.Province}?`)) return;
+      try {
+        const result = await fetchJson('/api/seal/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ town: sealTarget.Town, province: sealTarget.Province })
+        });
+        if (!result.success) throw new Error(result.error || 'Unknown error');
+        await loadSeals();
+        renderTable();
+        getSealModal() && getSealModal().hide();
+        showToast(`Seal removed for ${sealTarget.Town}.`, 'info');
+      } catch (err) {
+        showToast('Could not remove seal: ' + err.message, 'error');
+      }
+    }
+
+    // PNG/JPEG/GIF pass through; anything else (SVG, WEBP...) is rasterized to PNG
+    async function toDocxFriendlyImage(dataUrl) {
+      if (/^data:image\/(png|jpe?g|gif);/i.test(dataUrl)) return dataUrl;
+      const img = new Image();
+      img.src = dataUrl;
+      await img.decode();
+      const isSvg = /^data:image\/svg/i.test(dataUrl);
+      let w = img.naturalWidth || 1024, h = img.naturalHeight || 1024;
+      if (isSvg) { const s = 1024 / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL('image/png');
+    }
+
+    // ---------- Word template auto-fill ----------
+    let wordTemplates = [];
+    let wordPlaceholders = [];
+    let bsWordModal = null;
+
+    function lsGet(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function activeWordTemplate() { return lsGet('wordTemplate', ''); }
+    function escHtml(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    function saveWordPrefs() {
+      lsSet('wordSealWidth', document.getElementById('wordSealWidth').value || '1');
+      lsSet('wordBatchMode', document.getElementById('wordBatchMode').value || 'single');
+    }
+
+    async function loadWordTemplates() {
+      try {
+        const res = await fetchJson('/api/word-templates');
+        if (res.error) throw new Error(res.error);
+        wordTemplates = res.templates || [];
+        wordPlaceholders = res.placeholders || [];
+      } catch (err) {
+        wordTemplates = [];
+        showToast('Could not load Word templates: ' + err.message, 'error');
+      }
+      // Keep the active template valid
+      if (!wordTemplates.some(t => t.name === activeWordTemplate())) {
+        lsSet('wordTemplate', wordTemplates.length ? wordTemplates[0].name : '');
+      }
+      renderWordModal();
+      renderTable();
+    }
+
+    function renderWordModal() {
+      const active = activeWordTemplate();
+      const list = document.getElementById('wordTemplateList');
+      list.innerHTML = wordTemplates.length ? wordTemplates.map(t => {
+        const chips = (t.placeholders || []).map(p =>
+          `<span class="badge ${t.unknown && t.unknown.includes(p) ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' : 'bg-light text-secondary border'} me-1">${escHtml(p)}</span>`).join('');
+        const warn = t.error
+          ? `<div class="small text-danger mt-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>${escHtml(t.error)}</div>`
+          : (t.unknown && t.unknown.length ? `<div class="small text-warning-emphasis mt-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Unknown placeholders will be left blank: ${escHtml(t.unknown.join(', '))}</div>` : '');
+        return `
+          <label class="list-group-item d-flex gap-2 align-items-start">
+            <input class="form-check-input mt-1 flex-shrink-0" type="radio" name="wordTpl" value="${escHtml(t.name)}" ${t.name === active ? 'checked' : ''} onchange="selectWordTemplate(this.value)">
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold text-dark text-break">${escHtml(t.name)}</div>
+              <div class="small text-muted">${(t.size / 1024).toFixed(0)} KB • updated ${escHtml(t.updated)}</div>
+              <div class="mt-1">${chips || '<span class="small text-muted fst-italic">No placeholders found</span>'}</div>
+              ${warn}
+            </div>
+            <button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0" title="Delete template" onclick="event.preventDefault(); deleteWordTemplate(${JSON.stringify(t.name).replace(/"/g, '&quot;')})">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </label>`;
+      }).join('') : `<div class="list-group-item text-muted small py-3 text-center">No templates yet — upload a .docx or start from the sample template.</div>`;
+
+      document.getElementById('wordPlaceholderTable').innerHTML = wordPlaceholders.map(p => `
+        <tr>
+          <td class="text-nowrap"><button type="button" class="btn-copy font-monospace" onclick="copyText('{{ ${p.name} }}', 'Placeholder copied!')">{{ ${escHtml(p.name)} }}</button></td>
+          <td class="text-secondary">${escHtml(p.description)}</td>
+        </tr>`).join('');
+
+      document.getElementById('btnWordBatch').disabled = !active;
+      const verified = document.getElementById('verifiedOnlyCheck');
+      document.getElementById('wordVerifiedNote').innerText = verified && verified.checked ? ' • verified LGUs only' : '';
+    }
+
+    function selectWordTemplate(name) {
+      lsSet('wordTemplate', name);
+      renderWordModal();
+      renderTable();
+    }
+
+    async function openWordModal() {
+      document.getElementById('wordSealWidth').value = lsGet('wordSealWidth', '1');
+      document.getElementById('wordBatchMode').value = lsGet('wordBatchMode', 'single');
+      if (!bsWordModal && window.bootstrap && bootstrap.Modal) {
+        bsWordModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('wordModal'));
+      }
+      renderWordModal();
+      if (bsWordModal) bsWordModal.show();
+      await loadWordTemplates();
+    }
+
+    async function uploadWordTemplate(file) {
+      document.getElementById('wordFile').value = '';
+      if (!file) return;
+      if (!/\.docx$/i.test(file.name)) { showToast('Please choose a .docx file (save .doc files as .docx in Word first).', 'error'); return; }
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      try {
+        const res = await fetchJson('/api/word-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, data })
+        });
+        if (!res.success) throw new Error(res.error || 'Unknown error');
+        lsSet('wordTemplate', res.name);
+        showToast(`Template uploaded — ${res.placeholders.length} placeholder(s) found.`, 'success');
+        await loadWordTemplates();
+      } catch (err) {
+        showToast('Upload failed: ' + err.message, 'error');
+      }
+    }
+
+    async function deleteWordTemplate(name) {
+      if (!confirm(`Delete template "${name}"?`)) return;
+      try {
+        const res = await fetchJson('/api/word-templates/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (!res.success) throw new Error(res.error || 'Unknown error');
+        showToast('Template deleted.', 'info');
+        await loadWordTemplates();
+      } catch (err) {
+        showToast('Delete failed: ' + err.message, 'error');
+      }
+    }
+
+    // Download a file from an API URL, surfacing JSON errors instead of navigating away
+    async function downloadFrom(url, fallbackName) {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.status === 404 ? 'this server does not support this feature yet — restart the LGU server' : `HTTP ${res.status}` }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename\*=UTF-8''([^;]+)/i) || cd.match(/filename="([^"]+)"/i);
+      const name = m ? decodeURIComponent(m[1]) : fallbackName;
+      const blobUrl = URL.createObjectURL(await res.blob());
+      const a = Object.assign(document.createElement('a'), { href: blobUrl, download: name });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      return name;
+    }
+
+    async function fillWordOne(index) {
+      const r = allRecords[index];
+      if (!r) return;
+      const tpl = activeWordTemplate();
+      if (!tpl) { openWordModal(); showToast('Upload or choose a Word template first.', 'info'); return; }
+      const params = new URLSearchParams({
+        template: tpl,
+        town: r.Town,
+        province: r.Province,
+        casing: document.getElementById('casingSelect').value,
+        seal_width: lsGet('wordSealWidth', '1'),
+      });
+      try {
+        const name = await downloadFrom('/api/word-fill?' + params.toString(), `${r.Town}.docx`);
+        showToast(`Downloaded ${name}`, 'success');
+      } catch (err) {
+        showToast('Could not fill template: ' + err.message, 'error');
+      }
+    }
+
+    async function fillWordBatch() {
+      const tpl = activeWordTemplate();
+      if (!tpl) { showToast('Upload or choose a Word template first.', 'info'); return; }
+      const verified = document.getElementById('verifiedOnlyCheck');
+      const params = new URLSearchParams({
+        template: tpl,
+        region: document.getElementById('regSelect').value,
+        province: document.getElementById('provSelect').value,
+        lgu_type: document.getElementById('lguTypeSelect').value,
+        q: document.getElementById('searchInput').value,
+        casing: document.getElementById('casingSelect').value,
+        verified_only: verified && verified.checked ? '1' : '0',
+        seal_width: document.getElementById('wordSealWidth').value || '1',
+        mode: document.getElementById('wordBatchMode').value || 'single',
+      });
+      if (allRecords.length > 200 && !confirm(`Fill the template for ${allRecords.length} LGUs? This may take a while.`)) return;
+      const btn = document.getElementById('btnWordBatch');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Generating...';
+      try {
+        const name = await downloadFrom('/api/word-fill-batch?' + params.toString(), 'documents.docx');
+        showToast(`Downloaded ${name}`, 'success');
+      } catch (err) {
+        showToast('Could not fill templates: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-file-word me-1"></i> Fill Filtered LGUs';
+      }
+    }
+
+    // Copy the seal image to the clipboard (converted to PNG, which browsers accept)
+    async function copySeal(index) {
+      const r = allRecords[index];
+      const s = r && sealMap[sealKey(r)];
+      if (!s) return;
+      try {
+        const img = new Image();
+        img.src = sealUrl(s);
+        await img.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 512;
+        canvas.height = img.naturalHeight || 512;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('Seal image copied!', 'success');
+      } catch (err) {
+        window.open(sealUrl(s), '_blank', 'noopener');
+      }
+    }
+
+    (function setupSealDropzone() {
+      const drop = document.getElementById('sealDrop');
+      ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault();
+        drop.classList.add('dragover');
+      }));
+      ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault();
+        drop.classList.remove('dragover');
+      }));
+      drop.addEventListener('drop', e => {
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) {
+          onSealFile(file);
+        } else {
+          const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+          if (url) { document.getElementById('sealUrl').value = url.trim(); onSealUrlInput(); }
+        }
+      });
+      document.getElementById('sealModal').addEventListener('hidden.bs.modal', cancelSealCrop);
+      document.getElementById('sealCropCircle').addEventListener('change', e => {
+        document.getElementById('sealCropArea').classList.toggle('circle', e.target.checked);
+      });
+      // Paste an image (e.g. "Copy image" from Google results) while the seal modal is open
+      document.addEventListener('paste', e => {
+        if (!document.getElementById('sealModal').classList.contains('show')) return;
+        const item = Array.from(e.clipboardData.items || []).find(it => it.type.startsWith('image/'));
+        if (item) {
+          e.preventDefault();
+          onSealFile(item.getAsFile());
+        }
+      });
+    })();
 
     function showToast(msg, type = 'info') {
       const toastEl = document.getElementById('toast');
