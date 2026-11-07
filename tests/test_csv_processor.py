@@ -10,14 +10,14 @@ WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
-from data_processor import OfficialsData
+from lgu.data_processor import OfficialsData
 
 
 class TestCsvProcessor(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.csv_path = os.path.join(WORKSPACE_DIR, "officials_2025_2028.csv")
+        cls.csv_path = os.path.join(WORKSPACE_DIR, "data", "officials_2025_2028.csv")
         cls.data = OfficialsData(cls.csv_path)
         cls.data.load()
 

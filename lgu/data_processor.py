@@ -395,9 +395,15 @@ class OfficialsData:
     def __init__(self, data_path: Optional[str] = None, cache_path: Optional[str] = None, excel_path: Optional[str] = None):
         target = data_path or excel_path
         if not target:
-            xlsx_cand = os.path.join(os.path.dirname(os.path.abspath(__file__)), "officials_2025_2028.xlsx")
-            csv_cand = os.path.join(os.path.dirname(os.path.abspath(__file__)), "officials_2025_2028.csv")
-            target = xlsx_cand if os.path.exists(xlsx_cand) else (csv_cand if os.path.exists(csv_cand) else "officials_2025_2028.xlsx")
+            # Dataset lives in <project>/data/ (falls back to the project root for older layouts)
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            target = os.path.join(project_root, "data", "officials_2025_2028.xlsx")
+            for folder in (os.path.join(project_root, "data"), project_root):
+                xlsx_cand = os.path.join(folder, "officials_2025_2028.xlsx")
+                csv_cand = os.path.join(folder, "officials_2025_2028.csv")
+                if os.path.exists(xlsx_cand) or os.path.exists(csv_cand):
+                    target = xlsx_cand if os.path.exists(xlsx_cand) else csv_cand
+                    break
 
         self.data_path = os.path.abspath(target)
         self.excel_path = self.data_path  # Backwards compatibility alias

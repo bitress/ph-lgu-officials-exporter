@@ -5,12 +5,12 @@
 :: This is invoked by Windows Task Scheduler on logon.
 :: ============================================================
 setlocal enabledelayedexpansion
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 :: Create logs directory if missing
-if not exist "logs" mkdir logs
+if not exist "data\logs" mkdir "data\logs"
 
-set LOGFILE=logs\web_server.log
+set LOGFILE=data\logs\web_server.log
 set APP=app.py
 set PORT=8000
 

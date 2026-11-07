@@ -29,3 +29,7 @@ exports/
 logs/
 *.log
 
+
+# User-added seals and Word templates
+seals/
+word_templates/

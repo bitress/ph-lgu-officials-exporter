@@ -16,7 +16,7 @@ PORT = 8899
 # Start server in thread
 server_thread = threading.Thread(
     target=run_web,
-    kwargs={"port": PORT, "data_path": os.path.join(WORKSPACE_DIR, "officials_2025_2028.xlsx")},
+    kwargs={"port": PORT, "data_path": os.path.join(WORKSPACE_DIR, "data", "officials_2025_2028.xlsx")},
     daemon=True
 )
 server_thread.start()

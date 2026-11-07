@@ -31,7 +31,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
         pass
 
 # Local data processor
-from data_processor import OfficialsData
+from lgu.data_processor import OfficialsData
 
 
 def run_cli(args: argparse.Namespace, data: OfficialsData):
@@ -224,7 +224,99 @@ def run_web(port: int = 8000, data_path: Optional[str] = None, excel_path: Optio
             json.dump(vmap, f, ensure_ascii=False, indent=2)
         os.replace(tmp_path, verification_file)
 
+    # Manually added LGU seals: image files in seals/ plus a JSON index keyed by "Province|Town"
+    import base64
+    import re
+    seals_dir = os.path.join(base_dir, "seals")
+    seals_index_file = os.path.join(seals_dir, "seals.json")
+    seal_mime_ext = {
+        "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg",
+        "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg",
+    }
+    seal_ext_mime = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
+                     "webp": "image/webp", "svg": "image/svg+xml"}
+    max_seal_bytes = 5 * 1024 * 1024
+
+    def load_seals() -> dict:
+        if os.path.exists(seals_index_file):
+            try:
+                with open(seals_index_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def save_seals(smap: dict):
+        os.makedirs(seals_dir, exist_ok=True)
+        tmp_path = seals_index_file + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(smap, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, seals_index_file)
+
+    def seal_slug(province: str, town: str) -> str:
+        raw = f"{province}__{town}".lower()
+        return re.sub(r"[^a-z0-9ñ_]+", "-", raw).strip("-") or "seal"
+
+    def remove_seal_file(entry: Optional[dict]):
+        if entry and entry.get("file"):
+            path = os.path.join(seals_dir, os.path.basename(entry["file"]))
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+    def fetch_seal_url(url: str):
+        """Download an image from a URL. Returns (bytes, mime)."""
+        import urllib.request
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (LGU Directory seal fetcher)"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            mime = (resp.headers.get_content_type() or "").lower()
+            content = resp.read(max_seal_bytes + 1)
+        if mime not in seal_mime_ext:
+            raise ValueError(f"URL did not return a supported image (got {mime or 'unknown type'})")
+        return content, mime
+
+    # Custom Word template auto-fill
+    from lgu.word_templates import WordTemplateStore, PLACEHOLDERS, MAX_TEMPLATE_BYTES
+    word_store = WordTemplateStore(base_dir)
+    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+    def seal_path_for(province: str, town: str, smap: Optional[dict] = None) -> Optional[str]:
+        entry = (smap if smap is not None else load_seals()).get(f"{province}|{town}")
+        if entry and entry.get("file"):
+            return os.path.join(seals_dir, os.path.basename(entry["file"]))
+        return None
+
+    def parse_seal_width(query: dict) -> float:
+        try:
+            return min(max(float(query.get("seal_width", ["1"])[0]), 0.2), 8.0)
+        except ValueError:
+            return 1.0
+
+    def content_disposition(filename: str) -> str:
+        ascii_name = filename.encode("ascii", "replace").decode("ascii").replace("?", "_").replace('"', "")
+        return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{urllib.parse.quote(filename)}"
+
     class WebHandler(http.server.BaseHTTPRequestHandler):
+        def send_json(self, code: int, obj):
+            body = json.dumps(obj).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def send_download(self, content: bytes, mime: str, filename: str):
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Disposition", content_disposition(filename))
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+
         def log_message(self, format, *args):
             # Suppress normal GET logging to keep console clean
             return
@@ -295,9 +387,91 @@ def run_web(port: int = 8000, data_path: Optional[str] = None, excel_path: Optio
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
                     self.wfile.write(json.dumps({"success": False, "error": str(ex)}).encode("utf-8"))
+            elif parsed.path in {"/api/word-templates", "/api/word-templates/delete"}:
+                content_length = int(self.headers.get("Content-Length", 0))
+                if content_length > MAX_TEMPLATE_BYTES * 2:
+                    self.send_json(413, {"success": False, "error": "Template too large (max 15 MB)"})
+                    return
+                try:
+                    payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                    if parsed.path.endswith("/delete"):
+                        word_store.delete(payload.get("name", ""))
+                        self.send_json(200, {"success": True})
+                        return
+                    raw_data = payload.get("data", "")
+                    if "," in raw_data and raw_data.startswith("data:"):
+                        raw_data = raw_data.split(",", 1)[1]
+                    info = word_store.save(payload.get("filename", ""), base64.b64decode(raw_data))
+                    self.send_json(200, {"success": True, **info})
+                except (ValueError, FileNotFoundError) as ex:
+                    self.send_json(400, {"success": False, "error": str(ex)})
+                except Exception as ex:
+                    # Jinja syntax errors in the template land here
+                    self.send_json(400, {"success": False, "error": f"Could not read template: {ex}"})
+            elif parsed.path in {"/api/seal", "/api/seal/delete"}:
+                def reply(code: int, obj: dict):
+                    self.send_response(code)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(obj).encode("utf-8"))
+
+                content_length = int(self.headers.get("Content-Length", 0))
+                if content_length > max_seal_bytes * 2:
+                    reply(413, {"success": False, "error": "Image too large (max 5 MB)"})
+                    return
+                try:
+                    payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                    town = payload.get("town", "").strip()
+                    province = payload.get("province", "").strip()
+                    if not town or not province:
+                        reply(400, {"success": False, "error": "town and province required"})
+                        return
+                    key = f"{province}|{town}"
+                    smap = load_seals()
+
+                    if parsed.path == "/api/seal/delete":
+                        remove_seal_file(smap.pop(key, None))
+                        save_seals(smap)
+                        reply(200, {"success": True})
+                        return
+
+                    image = payload.get("image", "")
+                    url = payload.get("url", "").strip()
+                    if image:
+                        m = re.match(r"^data:([\w/+.-]+);base64,(.*)$", image, re.S)
+                        if not m:
+                            reply(400, {"success": False, "error": "Invalid image data"})
+                            return
+                        mime = m.group(1).lower()
+                        content = base64.b64decode(m.group(2))
+                        source = str(payload.get("source") or "upload")[:500]
+                    elif url:
+                        content, mime = fetch_seal_url(url)
+                        source = url
+                    else:
+                        reply(400, {"success": False, "error": "Provide an image file or an image URL"})
+                        return
+
+                    if mime not in seal_mime_ext:
+                        reply(400, {"success": False, "error": f"Unsupported image type: {mime}"})
+                        return
+                    if len(content) > max_seal_bytes:
+                        reply(413, {"success": False, "error": "Image too large (max 5 MB)"})
+                        return
+
+                    os.makedirs(seals_dir, exist_ok=True)
+                    remove_seal_file(smap.get(key))
+                    filename = f"{seal_slug(province, town)}.{seal_mime_ext[mime]}"
+                    with open(os.path.join(seals_dir, filename), "wb") as f:
+                        f.write(content)
+                    updated = datetime.datetime.now().isoformat(timespec="seconds")
+                    smap[key] = {"file": filename, "source": source, "updated": updated}
+                    save_seals(smap)
+                    reply(200, {"success": True, "file": filename, "updated": updated})
+                except Exception as ex:
+                    reply(500, {"success": False, "error": str(ex)})
             else:
-                self.send_response(404)
-                self.end_headers()
+                self.send_json(404, {"success": False, "error": f"Unknown endpoint: {self.path.split('?')[0]}"})
 
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path)
@@ -340,6 +514,123 @@ def run_web(port: int = 8000, data_path: Optional[str] = None, excel_path: Optio
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps(vmap).encode("utf-8"))
+
+            elif path == "/api/word-templates":
+                try:
+                    templates = word_store.list()
+                except Exception as ex:
+                    self.send_json(500, {"error": str(ex)})
+                    return
+                self.send_json(200, {
+                    "templates": templates,
+                    "placeholders": [{"name": n, "description": d} for n, d in PLACEHOLDERS],
+                })
+
+            elif path == "/api/word-templates/sample":
+                try:
+                    self.send_download(word_store.sample_template(), docx_mime, "LGU Letter Template (sample).docx")
+                except Exception as ex:
+                    self.send_json(500, {"error": str(ex)})
+
+            elif path == "/api/word-fill":
+                tpl_name = query.get("template", [""])[0]
+                town = query.get("town", [""])[0].strip()
+                prov = query.get("province", [""])[0].strip()
+                casing = query.get("casing", ["title"])[0]
+                try:
+                    matches = [
+                        r for r in data.filter_records(province=prov, name_case=casing, include_contacts=True)
+                        if r["Town"].strip().upper() == town.upper()
+                    ]
+                    if not matches:
+                        self.send_json(404, {"error": f"LGU not found: {town}, {prov}"})
+                        return
+                    rec = matches[0]
+                    content, filename = word_store.fill_one(
+                        tpl_name, rec, data.get_municipality_raw(rec["Town"], rec["Province"]),
+                        seal_path_for(rec["Province"], rec["Town"]), parse_seal_width(query)
+                    )
+                    self.send_download(content, docx_mime, filename)
+                except FileNotFoundError as ex:
+                    self.send_json(404, {"error": str(ex)})
+                except Exception as ex:
+                    self.send_json(400, {"error": f"Could not fill template: {ex}"})
+
+            elif path == "/api/word-fill-batch":
+                tpl_name = query.get("template", [""])[0]
+                casing = query.get("casing", ["title"])[0]
+                verified_only = query.get("verified_only", ["0"])[0] == "1"
+                try:
+                    records = data.filter_records(
+                        region=query.get("region", ["ALL"])[0],
+                        province=query.get("province", ["ALL"])[0],
+                        search_query=query.get("q", [""])[0],
+                        name_case=casing,
+                        include_contacts=True,
+                        lgu_type=query.get("lgu_type", ["all"])[0],
+                    )
+                    if verified_only:
+                        vmap = load_verification()
+                        records = [r for r in records if vmap.get(f"{r['Province']}|{r['Town']}")]
+                    if not records:
+                        self.send_json(404, {"error": "No LGUs match the current filters"})
+                        return
+                    smap = load_seals()
+                    items = (
+                        (r, data.get_municipality_raw(r["Town"], r["Province"]), seal_path_for(r["Province"], r["Town"], smap))
+                        for r in records
+                    )
+                    reg = query.get("region", ["ALL"])[0]
+                    content, filename, mime, _, _ = word_store.fill_batch(
+                        tpl_name, items, parse_seal_width(query),
+                        mode=query.get("mode", ["single"])[0],
+                        label="All LGUs" if reg == "ALL" else reg.title(),
+                    )
+                    self.send_download(content, mime, filename)
+                except FileNotFoundError as ex:
+                    self.send_json(404, {"error": str(ex)})
+                except Exception as ex:
+                    self.send_json(400, {"error": f"Could not fill template: {ex}"})
+
+            elif path == "/api/seals":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(load_seals()).encode("utf-8"))
+
+            elif path == "/api/seal-proxy":
+                # Fetch a remote image server-side so the browser can crop it without CORS canvas tainting
+                try:
+                    content, mime = fetch_seal_url(query.get("url", [""])[0].strip())
+                    if len(content) > max_seal_bytes:
+                        raise ValueError("Image too large (max 5 MB)")
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime)
+                    self.send_header("Content-Length", str(len(content)))
+                    self.end_headers()
+                    self.wfile.write(content)
+                except Exception as ex:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": False, "error": str(ex)}).encode("utf-8"))
+
+            elif path.startswith("/seals/"):
+                filename = os.path.basename(urllib.parse.unquote(path[len("/seals/"):]))
+                file_path = os.path.join(seals_dir, filename)
+                ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+                if filename and ext in seal_ext_mime and os.path.isfile(file_path):
+                    with open(file_path, "rb") as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", seal_ext_mime[ext])
+                    self.send_header("Content-Length", str(len(content)))
+                    self.send_header("Cache-Control", "no-cache")
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
 
             elif path == "/api/stats":
                 self.send_response(200)
@@ -482,8 +773,7 @@ def run_web(port: int = 8000, data_path: Optional[str] = None, excel_path: Optio
                 self.wfile.write(json.dumps({"success": True, "files_count": len(files)}).encode("utf-8"))
 
             else:
-                self.send_response(404)
-                self.end_headers()
+                self.send_json(404, {"success": False, "error": f"Unknown endpoint: {self.path.split('?')[0]}"})
 
     with socketserver.TCPServer(("", port), WebHandler) as httpd:
         url = f"http://localhost:{port}"
@@ -1269,7 +1559,7 @@ Examples:
   python app.py --split-regions --format xlsx
         """
     )
-    parser.add_argument("--data", default=None, help="Path to officials dataset (.xlsx or .csv, default: officials_2025_2028.xlsx)")
+    parser.add_argument("--data", default=None, help="Path to officials dataset (.xlsx or .csv, default: data/officials_2025_2028.xlsx)")
     parser.add_argument("--excel", default=None, help="Legacy alias for --data (path to Excel file)")
     parser.add_argument("--region", help="Region to filter (e.g. 'REGION 3', 'NCR', 'BARMM')")
     parser.add_argument("--province", help="Province to filter (e.g. 'PAMPANGA', 'TARLAC')")
